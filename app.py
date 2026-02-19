@@ -391,16 +391,30 @@ def ai_action():
 
     prompts = {
         "summarize": (
-            "Provide a concise, well-structured summary of this transcript. "
-            "Use bullet points for key points.\n\n" + text
+            "Task: Summarize the transcript clearly and concisely.\n\n"
+            "Formatting rules:\n"
+            "- Use Markdown bullet points.\n"
+            "- One main idea per bullet.\n"
+            "- Do not add information not present in the transcript.\n"
+            "- Do not repeat points.\n"
+            "- No introduction or conclusion.\n\n"
+            "Transcript:\n"
+            f"{text}"
         ),
         "grammar": (
-            "Fix all grammar, spaces, spelling, punctuation. You can fix numbering if needed."
-            "Do not add things I did not say, but fix my spelling if something was wrong. Reflow the text if needed."
-            "Do not remove anything I said. If something I said looks like a list, then you can make it into one."
-            "Preseve the same format for lists (keep other text as is), use markdown. If I say next, add it to the next"
-            "list item, remove the word next. Of course not if its part of a sentece"
-            "Return only the corrected text.\n\n" + text
+            "Task: Correct the text.\n\n"
+            "Strict rules:\n"
+            "1. Fix grammar, spelling, spacing, punctuation, and numbering.\n"
+            "2. Do NOT remove content.\n"
+            "3. Do NOT add new information.\n"
+            "4. Preserve meaning exactly.\n"
+            "5. Preserve existing structure unless it is clearly broken.\n"
+            "6. If text clearly represents a list, format it as a proper Markdown list.\n"
+            "7. If the word 'next' appears at the beginning of a sentence and indicates the next list item, remove the word and merge it into the list structure.\n"
+            "8. If 'next' is part of a normal sentence, keep it.\n"
+            "9. Return ONLY the corrected text. No explanations.\n\n"
+            "Text:\n"
+            f"{text}"
         ),
     }
 
