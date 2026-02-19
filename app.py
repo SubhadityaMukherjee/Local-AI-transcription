@@ -413,6 +413,7 @@ def ai_action():
             "7. If the word 'next' appears at the beginning of a sentence and indicates the next list item, remove the word and merge it into the list structure.\n"
             "8. If 'next' is part of a normal sentence, keep it.\n"
             "9. Return ONLY the corrected text. No explanations.\n\n"
+            "10. Use - for markdown lists\n\n"
             "Text:\n"
             f"{text}"
         ),
