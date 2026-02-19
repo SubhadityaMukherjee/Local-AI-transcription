@@ -1,0 +1,1051 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Whisper Studio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #0e0e0f;
+        --surface: #17171a;
+        --surface2: #1f1f24;
+        --border: #2a2a32;
+        --accent: #e8d5b0;
+        --accent2: #c4a882;
+        --red: #e05c5c;
+        --green: #5ce08a;
+        --text: #f0ede8;
+        --muted: #7a7880;
+        --mono: "DM Mono", monospace;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: "DM Sans", sans-serif;
+        font-weight: 300;
+        min-height: 100vh;
+        overflow-x: hidden;
+      }
+
+      /* Noise texture overlay */
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+        pointer-events: none;
+        z-index: 1000;
+        opacity: 0.4;
+      }
+
+      header {
+        padding: 2rem 3rem;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: baseline;
+        gap: 1.5rem;
+      }
+
+      h1 {
+        font-family: "DM Serif Display", serif;
+        font-size: 2rem;
+        font-weight: 400;
+        color: var(--accent);
+        letter-spacing: -0.02em;
+      }
+
+      .subtitle {
+        font-size: 0.8rem;
+        color: var(--muted);
+        font-family: var(--mono);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 380px 1fr;
+        min-height: calc(100vh - 73px);
+      }
+
+      /* LEFT PANEL */
+      .panel-left {
+        border-right: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+      }
+
+      .section {
+        padding: 1.5rem;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .section-label {
+        font-family: var(--mono);
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--muted);
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .section-label::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: var(--border);
+      }
+
+      /* RECORD BUTTON */
+      .record-area {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1.2rem;
+        padding: 1.5rem 0;
+      }
+
+      .record-btn {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        border: 2px solid var(--border);
+        background: var(--surface2);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        position: relative;
+        outline: none;
+      }
+
+      .record-btn:hover {
+        border-color: var(--red);
+        background: rgba(224, 92, 92, 0.08);
+      }
+
+      .record-btn.recording {
+        border-color: var(--red);
+        background: rgba(224, 92, 92, 0.15);
+        animation: pulse-ring 1.5s ease infinite;
+      }
+
+      .record-btn .dot {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: var(--red);
+        transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+
+      .record-btn.recording .dot {
+        border-radius: 6px;
+        width: 22px;
+        height: 22px;
+      }
+
+      @keyframes pulse-ring {
+        0% {
+          box-shadow: 0 0 0 0 rgba(224, 92, 92, 0.4);
+        }
+        70% {
+          box-shadow: 0 0 0 16px rgba(224, 92, 92, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(224, 92, 92, 0);
+        }
+      }
+
+      .record-status {
+        font-family: var(--mono);
+        font-size: 0.75rem;
+        color: var(--muted);
+        letter-spacing: 0.05em;
+      }
+
+      .record-status.active {
+        color: var(--red);
+      }
+
+      .timer {
+        font-family: var(--mono);
+        font-size: 0.85rem;
+        color: var(--accent);
+        min-height: 1.2em;
+      }
+
+      /* Waveform */
+      canvas#waveform {
+        width: 100%;
+        height: 48px;
+        border-radius: 4px;
+        background: var(--surface);
+        display: block;
+      }
+
+      /* UPLOAD */
+      .upload-zone {
+        border: 1.5px dashed var(--border);
+        border-radius: 8px;
+        padding: 2rem 1rem;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        background: var(--surface);
+        position: relative;
+      }
+
+      .upload-zone:hover,
+      .upload-zone.drag-over {
+        border-color: var(--accent2);
+        background: rgba(232, 213, 176, 0.04);
+      }
+
+      .upload-zone input[type="file"] {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        cursor: pointer;
+      }
+
+      .upload-icon {
+        font-size: 1.8rem;
+        margin-bottom: 0.5rem;
+      }
+      .upload-hint {
+        font-size: 0.78rem;
+        color: var(--muted);
+        margin-top: 0.3rem;
+      }
+
+      /* JOBS LIST */
+      .jobs-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+      }
+
+      .jobs-list:empty::after {
+        content: "No jobs yet";
+        font-family: var(--mono);
+        font-size: 0.75rem;
+        color: var(--muted);
+        text-align: center;
+        margin-top: 2rem;
+        display: block;
+      }
+
+      .job-item {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 0.75rem 1rem;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .job-item:hover {
+        border-color: var(--accent2);
+      }
+      .job-item.active {
+        border-color: var(--accent);
+        background: rgba(232, 213, 176, 0.05);
+      }
+
+      .job-name {
+        font-size: 0.82rem;
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-bottom: 0.3rem;
+      }
+
+      .job-meta {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .job-status {
+        font-family: var(--mono);
+        font-size: 0.65rem;
+        letter-spacing: 0.05em;
+        padding: 2px 8px;
+        border-radius: 100px;
+        text-transform: uppercase;
+      }
+
+      .status-queued {
+        background: rgba(122, 120, 128, 0.2);
+        color: var(--muted);
+      }
+      .status-converting {
+        background: rgba(232, 213, 176, 0.1);
+        color: var(--accent2);
+      }
+      .status-transcribing {
+        background: rgba(92, 224, 138, 0.1);
+        color: var(--green);
+      }
+      .status-done {
+        background: rgba(92, 224, 138, 0.15);
+        color: var(--green);
+      }
+      .status-error {
+        background: rgba(224, 92, 92, 0.15);
+        color: var(--red);
+      }
+
+      .job-progress {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        height: 2px;
+        background: var(--accent2);
+        transition: width 0.5s ease;
+      }
+
+      .job-delete {
+        margin-left: auto;
+        background: none;
+        border: none;
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 0.75rem;
+        padding: 2px 4px;
+        border-radius: 3px;
+        line-height: 1;
+        opacity: 0;
+        transition:
+          opacity 0.15s,
+          color 0.15s;
+      }
+      .job-item:hover .job-delete {
+        opacity: 1;
+      }
+      .job-delete:hover {
+        color: var(--red);
+      }
+
+      /* RIGHT PANEL */
+      .panel-right {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .editor-toolbar {
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        flex-wrap: wrap;
+      }
+
+      .btn {
+        font-family: "DM Sans", sans-serif;
+        font-size: 0.78rem;
+        font-weight: 500;
+        padding: 0.45rem 1rem;
+        border-radius: 5px;
+        border: 1px solid var(--border);
+        background: var(--surface2);
+        color: var(--text);
+        cursor: pointer;
+        transition: all 0.15s ease;
+        letter-spacing: 0.02em;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        white-space: nowrap;
+      }
+
+      .btn:hover {
+        border-color: var(--accent2);
+        color: var(--accent);
+      }
+      .btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+
+      .btn-primary {
+        background: var(--accent);
+        color: #0e0e0f;
+        border-color: var(--accent);
+        font-weight: 600;
+      }
+      .btn-primary:hover {
+        background: var(--accent2);
+        border-color: var(--accent2);
+        color: #0e0e0f;
+      }
+
+      .btn-ghost {
+        background: transparent;
+        border-color: transparent;
+        color: var(--muted);
+      }
+      .btn-ghost:hover {
+        border-color: var(--border);
+        color: var(--text);
+      }
+
+      .spacer {
+        flex: 1;
+      }
+
+      .editor-area {
+        flex: 1;
+        padding: 2rem 2.5rem;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .empty-state {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: var(--muted);
+        gap: 1rem;
+      }
+
+      .empty-glyph {
+        font-family: "DM Serif Display", serif;
+        font-size: 4rem;
+        color: var(--border);
+        line-height: 1;
+      }
+
+      .empty-text {
+        font-size: 0.88rem;
+      }
+
+      #transcript-editor {
+        flex: 1;
+        width: 100%;
+        background: transparent;
+        border: none;
+        outline: none;
+        resize: none;
+        color: var(--text);
+        font-family: "DM Sans", sans-serif;
+        font-size: 0.95rem;
+        line-height: 1.8;
+        font-weight: 300;
+        display: none;
+      }
+
+      .processing-overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(14, 14, 15, 0.85);
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1rem;
+        backdrop-filter: blur(4px);
+      }
+
+      .processing-overlay.active {
+        display: flex;
+      }
+
+      .spinner {
+        width: 40px;
+        height: 40px;
+        border: 2px solid var(--border);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .processing-label {
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        color: var(--accent2);
+        letter-spacing: 0.05em;
+      }
+
+      /* Toast */
+      #toast-container {
+        position: fixed;
+        bottom: 1.5rem;
+        right: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        z-index: 9999;
+      }
+
+      .toast {
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        color: var(--text);
+        padding: 0.75rem 1.2rem;
+        border-radius: 6px;
+        font-size: 0.82rem;
+        font-family: var(--mono);
+        animation: slide-up 0.3s ease;
+        max-width: 320px;
+      }
+
+      .toast.error {
+        border-color: var(--red);
+        color: var(--red);
+      }
+      .toast.success {
+        border-color: var(--green);
+        color: var(--green);
+      }
+
+      @keyframes slide-up {
+        from {
+          opacity: 0;
+          transform: translateY(12px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .char-count {
+        font-family: var(--mono);
+        font-size: 0.7rem;
+        color: var(--muted);
+        margin-left: auto;
+      }
+
+      @media (max-width: 768px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+        .panel-left {
+          border-right: none;
+          border-bottom: 1px solid var(--border);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Whisper Studio</h1>
+      <span class="subtitle">// powered by whisper.cpp</span>
+    </header>
+
+    <div class="layout">
+      <!-- LEFT PANEL -->
+      <aside class="panel-left">
+        <!-- RECORD -->
+        <div class="section">
+          <div class="section-label">Record Audio</div>
+          <div class="record-area">
+            <button class="record-btn" id="record-btn" title="Click to record">
+              <div class="dot"></div>
+            </button>
+            <div class="timer" id="timer"></div>
+            <span class="record-status" id="record-status"
+              >Click to start recording</span
+            >
+            <canvas id="waveform"></canvas>
+          </div>
+        </div>
+
+        <!-- UPLOAD -->
+        <div class="section">
+          <div class="section-label">Upload File</div>
+          <div class="upload-zone" id="upload-zone">
+            <input type="file" id="file-input" accept="audio/*,video/*" />
+            <div class="upload-icon">⬆</div>
+            <div style="font-size: 0.85rem">Drop audio or video file here</div>
+            <div class="upload-hint">mp3, wav, flac, m4a, mp4, mkv, mov …</div>
+          </div>
+        </div>
+
+        <!-- JOBS -->
+        <div
+          class="section-label"
+          style="padding: 1rem 1.5rem 0.5rem; margin: 0"
+        >
+          Jobs
+        </div>
+        <div class="jobs-list" id="jobs-list"></div>
+      </aside>
+
+      <!-- RIGHT PANEL -->
+      <main class="panel-right">
+        <div class="editor-toolbar">
+          <button class="btn" id="btn-summarize" disabled>⚡ Summarize</button>
+          <button class="btn" id="btn-grammar" disabled>✦ Fix Grammar</button>
+          <button class="btn btn-ghost" id="btn-copy" disabled>⎘ Copy</button>
+          <div class="spacer"></div>
+          <span class="char-count" id="char-count"></span>
+          <button class="btn btn-primary" id="btn-export" disabled>
+            ↓ Export Markdown
+          </button>
+        </div>
+
+        <div class="editor-area">
+          <div class="empty-state" id="empty-state">
+            <div class="empty-glyph">◌</div>
+            <div class="empty-text">Record audio or upload a file to begin</div>
+          </div>
+
+          <textarea
+            id="transcript-editor"
+            spellcheck="true"
+            placeholder="Transcript will appear here…"
+          ></textarea>
+
+          <div class="processing-overlay" id="processing-overlay">
+            <div class="spinner"></div>
+            <div class="processing-label" id="processing-label">
+              Processing…
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script>
+      // ─── State ───────────────────────────────────────────────────────────────────
+      let mediaRecorder = null;
+      let recordChunks = [];
+      let recordStream = null;
+      let recordStart = null;
+      let timerInterval = null;
+      let analyser = null;
+      let animFrame = null;
+      let activeJobId = null;
+      let pollInterval = null;
+
+      // ─── DOM ─────────────────────────────────────────────────────────────────────
+      const recordBtn = document.getElementById("record-btn");
+      const timerEl = document.getElementById("timer");
+      const statusEl = document.getElementById("record-status");
+      const waveformCanvas = document.getElementById("waveform");
+      const ctx2d = waveformCanvas.getContext("2d");
+      const fileInput = document.getElementById("file-input");
+      const uploadZone = document.getElementById("upload-zone");
+      const jobsList = document.getElementById("jobs-list");
+      const editor = document.getElementById("transcript-editor");
+      const emptyState = document.getElementById("empty-state");
+      const processingOverlay = document.getElementById("processing-overlay");
+      const processingLabel = document.getElementById("processing-label");
+      const btnSummarize = document.getElementById("btn-summarize");
+      const btnGrammar = document.getElementById("btn-grammar");
+      const btnCopy = document.getElementById("btn-copy");
+      const btnExport = document.getElementById("btn-export");
+      const charCount = document.getElementById("char-count");
+
+      // ─── Toast ────────────────────────────────────────────────────────────────────
+      function toast(msg, type = "info") {
+        const t = document.createElement("div");
+        t.className = `toast ${type}`;
+        t.textContent = msg;
+        document.getElementById("toast-container").appendChild(t);
+        setTimeout(() => t.remove(), 4000);
+      }
+
+      // ─── Recording ────────────────────────────────────────────────────────────────
+      recordBtn.addEventListener("click", toggleRecord);
+
+      async function toggleRecord() {
+        if (mediaRecorder && mediaRecorder.state === "recording") {
+          stopRecording();
+        } else {
+          await startRecording();
+        }
+      }
+
+      async function startRecording() {
+        try {
+          recordStream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+          });
+        } catch (e) {
+          toast("Microphone access denied", "error");
+          return;
+        }
+
+        recordChunks = [];
+        const audioCtx = new AudioContext();
+        const source = audioCtx.createMediaStreamSource(recordStream);
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        drawWaveform();
+
+        mediaRecorder = new MediaRecorder(recordStream, {
+          mimeType: "audio/webm",
+        });
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) recordChunks.push(e.data);
+        };
+        mediaRecorder.onstop = submitRecording;
+        mediaRecorder.start(100);
+
+        recordStart = Date.now();
+        timerInterval = setInterval(updateTimer, 500);
+        recordBtn.classList.add("recording");
+        statusEl.textContent = "Recording… click to stop";
+        statusEl.classList.add("active");
+      }
+
+      function stopRecording() {
+        if (mediaRecorder) mediaRecorder.stop();
+        if (recordStream) recordStream.getTracks().forEach((t) => t.stop());
+        clearInterval(timerInterval);
+        cancelAnimationFrame(animFrame);
+        recordBtn.classList.remove("recording");
+        statusEl.textContent = "Processing…";
+        statusEl.classList.remove("active");
+        timerEl.textContent = "";
+        ctx2d.clearRect(0, 0, waveformCanvas.width, waveformCanvas.height);
+      }
+
+      async function submitRecording() {
+        const blob = new Blob(recordChunks, { type: "audio/webm" });
+        const fd = new FormData();
+        fd.append("audio", blob, "recording.webm");
+
+        try {
+          const res = await fetch("/api/record", { method: "POST", body: fd });
+          const data = await res.json();
+          if (data.job_id) {
+            addJob({
+              id: data.job_id,
+              filename: "recording.webm",
+              status: "queued",
+              progress: 0,
+            });
+            watchJob(data.job_id);
+            toast("Recording submitted");
+          }
+        } catch (e) {
+          toast("Upload failed", "error");
+        }
+        statusEl.textContent = "Click to start recording";
+      }
+
+      function updateTimer() {
+        const s = Math.floor((Date.now() - recordStart) / 1000);
+        timerEl.textContent = `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+      }
+
+      function drawWaveform() {
+        animFrame = requestAnimationFrame(drawWaveform);
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteTimeDomainData(data);
+        const W = waveformCanvas.offsetWidth;
+        const H = waveformCanvas.offsetHeight;
+        waveformCanvas.width = W;
+        waveformCanvas.height = H;
+        ctx2d.clearRect(0, 0, W, H);
+        ctx2d.strokeStyle = "#c4a882";
+        ctx2d.lineWidth = 1.5;
+        ctx2d.beginPath();
+        const step = W / data.length;
+        for (let i = 0; i < data.length; i++) {
+          const y = (data[i] / 128.0) * (H / 2);
+          i === 0 ? ctx2d.moveTo(i * step, y) : ctx2d.lineTo(i * step, y);
+        }
+        ctx2d.stroke();
+      }
+
+      // ─── File Upload ─────────────────────────────────────────────────────────────
+      fileInput.addEventListener("change", (e) => {
+        if (e.target.files[0]) uploadFile(e.target.files[0]);
+      });
+
+      uploadZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        uploadZone.classList.add("drag-over");
+      });
+      uploadZone.addEventListener("dragleave", () =>
+        uploadZone.classList.remove("drag-over"),
+      );
+      uploadZone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        uploadZone.classList.remove("drag-over");
+        if (e.dataTransfer.files[0]) uploadFile(e.dataTransfer.files[0]);
+      });
+
+      async function uploadFile(file) {
+        const fd = new FormData();
+        fd.append("file", file);
+        toast(`Uploading ${file.name}…`);
+        try {
+          const res = await fetch("/api/upload", { method: "POST", body: fd });
+          const data = await res.json();
+          if (data.error) {
+            toast(data.error, "error");
+            return;
+          }
+          addJob({
+            id: data.job_id,
+            filename: file.name,
+            status: "queued",
+            progress: 0,
+          });
+          watchJob(data.job_id);
+          toast("File uploaded — transcribing…", "success");
+        } catch (e) {
+          toast("Upload failed", "error");
+        }
+      }
+
+      // ─── Jobs ─────────────────────────────────────────────────────────────────────
+      let jobElements = {};
+
+      function addJob(job) {
+        const el = document.createElement("div");
+        el.className = "job-item";
+        el.dataset.id = job.id;
+        el.innerHTML = `
+    <div class="job-name">${job.filename}</div>
+    <div class="job-meta">
+      <span class="job-status status-${job.status}">${job.status}</span>
+      <button class="job-delete" title="Delete" data-id="${job.id}">✕</button>
+    </div>
+    <div class="job-progress" style="width:${job.progress || 0}%"></div>
+  `;
+        el.querySelector(".job-delete").addEventListener("click", (e) => {
+          e.stopPropagation();
+          deleteJob(job.id);
+        });
+        el.addEventListener("click", () => selectJob(job.id));
+        jobsList.prepend(el);
+        jobElements[job.id] = el;
+      }
+
+      function updateJobEl(job) {
+        const el = jobElements[job.id];
+        if (!el) return;
+        el.querySelector(".job-status").className =
+          `job-status status-${job.status}`;
+        el.querySelector(".job-status").textContent = job.status;
+        el.querySelector(".job-progress").style.width =
+          (job.progress || 0) + "%";
+        if (job.status === "done") {
+          el.querySelector(".job-progress").style.background = "var(--green)";
+        }
+        if (job.status === "error") {
+          el.querySelector(".job-progress").style.background = "var(--red)";
+        }
+      }
+
+      function selectJob(id) {
+        document
+          .querySelectorAll(".job-item")
+          .forEach((e) => e.classList.remove("active"));
+        if (jobElements[id]) jobElements[id].classList.add("active");
+        activeJobId = id;
+        // If done, load transcript
+        fetch(`/api/status/${id}`)
+          .then((r) => r.json())
+          .then((job) => {
+            if (job.status === "done" && job.transcript) {
+              showTranscript(job.transcript);
+            } else if (job.status === "error") {
+              toast(`Error: ${job.error}`, "error");
+            } else {
+              showProcessing(job.status);
+            }
+          });
+      }
+
+      async function deleteJob(id) {
+        await fetch(`/api/jobs/${id}`, { method: "DELETE" });
+        const el = jobElements[id];
+        if (el) el.remove();
+        delete jobElements[id];
+        if (activeJobId === id) {
+          activeJobId = null;
+          editor.style.display = "none";
+          emptyState.style.display = "flex";
+          setEditorButtons(false);
+          charCount.textContent = "";
+        }
+      }
+
+      function watchJob(id) {
+        const poll = setInterval(async () => {
+          const res = await fetch(`/api/status/${id}`);
+          const job = await res.json();
+          updateJobEl(job);
+          if (job.status === "done" || job.status === "error") {
+            clearInterval(poll);
+            if (job.status === "done") {
+              toast("Transcription complete!", "success");
+              if (activeJobId === id || !activeJobId) {
+                showTranscript(job.transcript);
+                selectJob(id);
+              }
+            } else {
+              toast(`Job failed: ${job.error}`, "error");
+              if (activeJobId === id) hideProcessing();
+            }
+          } else {
+            if (activeJobId === id) {
+              processingLabel.textContent = `${job.status}… ${job.progress}%`;
+            }
+          }
+        }, 1500);
+      }
+
+      // ─── Transcript Editor ────────────────────────────────────────────────────────
+      function showTranscript(text) {
+        emptyState.style.display = "none";
+        processingOverlay.classList.remove("active");
+        editor.style.display = "block";
+        editor.value = text;
+        updateCharCount();
+        setEditorButtons(true);
+      }
+
+      function showProcessing(label) {
+        emptyState.style.display = "none";
+        processingOverlay.classList.add("active");
+        processingLabel.textContent = label + "…";
+        editor.style.display = "none";
+        setEditorButtons(false);
+      }
+
+      function hideProcessing() {
+        processingOverlay.classList.remove("active");
+      }
+
+      function setEditorButtons(on) {
+        btnSummarize.disabled = !on;
+        btnGrammar.disabled = !on;
+        btnCopy.disabled = !on;
+        btnExport.disabled = !on;
+      }
+
+      editor.addEventListener("input", updateCharCount);
+
+      function updateCharCount() {
+        const n = editor.value.length;
+        charCount.textContent = n > 0 ? `${n.toLocaleString()} chars` : "";
+      }
+
+      // ─── Toolbar Actions ──────────────────────────────────────────────────────────
+      btnCopy.addEventListener("click", () => {
+        navigator.clipboard
+          .writeText(editor.value)
+          .then(() => toast("Copied!", "success"));
+      });
+
+      btnExport.addEventListener("click", () => {
+        const text = editor.value;
+        const md = `# Transcript\n\n${text}\n`;
+        const blob = new Blob([md], { type: "text/markdown" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "transcript.md";
+        a.click();
+        URL.revokeObjectURL(url);
+        toast("Exported as Markdown", "success");
+      });
+
+      async function aiAction(mode) {
+        const text = editor.value;
+        if (!text.trim()) return;
+
+        const btn = mode === "summarize" ? btnSummarize : btnGrammar;
+        const origText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = "…";
+
+        try {
+          const res = await fetch("/api/summarize", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text, mode }),
+          });
+          const data = await res.json();
+          if (data.error) {
+            toast(data.hint || data.error, "error");
+          } else {
+            editor.value = data.result;
+            updateCharCount();
+            toast(
+              `${mode === "summarize" ? "Summary" : "Grammar fix"} applied`,
+              "success",
+            );
+          }
+        } catch (e) {
+          toast("AI processing failed", "error");
+        } finally {
+          btn.disabled = false;
+          btn.textContent = origText;
+          btnSummarize.disabled = false;
+          btnGrammar.disabled = false;
+        }
+      }
+
+      btnSummarize.addEventListener("click", () => aiAction("summarize"));
+      btnGrammar.addEventListener("click", () => aiAction("grammar"));
+
+      // ─── Load existing jobs on boot ───────────────────────────────────────────────
+      (async function init() {
+        try {
+          const res = await fetch("/api/jobs");
+          const list = await res.json();
+          // Add in reverse so newest is on top after prepend
+          [...list].reverse().forEach((job) => {
+            addJob(job);
+            if (job.status !== "done" && job.status !== "error") {
+              watchJob(job.id);
+            }
+          });
+          // Auto-select latest done job
+          const done = list.find((j) => j.status === "done");
+          if (done) selectJob(done.id);
+        } catch (e) {
+          /* server not ready */
+        }
+      })();
+    </script>
+  </body>
+</html>
