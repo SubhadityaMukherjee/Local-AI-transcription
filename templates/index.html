@@ -998,7 +998,7 @@
         btn.textContent = "…";
 
         try {
-          const res = await fetch("/api/summarize", {
+          const res = await fetch("/api/ai", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ text, mode }),

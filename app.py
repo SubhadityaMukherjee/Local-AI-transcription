@@ -121,15 +121,18 @@ _lock = threading.Lock()
 
 def _persist():
     """Write only completed/errored jobs to disk. Called after every state change."""
-    saveable = {
-        jid: j
-        for jid, j in jobs.items()
-        if j["status"] in ("done", "error")
-        and "debug_log" not in j  # don't bloat the file with raw stderr
-    }
-    tmp = JOBS_FILE.with_suffix(".tmp")
-    tmp.write_text(json.dumps(saveable, indent=2))
-    tmp.replace(JOBS_FILE)
+    with _lock:
+        saveable = {
+            jid: {k: v for k, v in j.items() if k != "debug_log"}
+            for jid, j in jobs.items()
+            if j["status"] in ("done", "error")
+        }
+    try:
+        tmp = JOBS_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(saveable, indent=2))
+        tmp.replace(JOBS_FILE)
+    except Exception as e:
+        print(f"  Warning: could not persist jobs: {e}")
 
 
 def _load_jobs():
@@ -166,13 +169,16 @@ def new_job(filename: str) -> dict:
 
 
 def _upd(job_id, **kw):
+    should_persist = False
     with _lock:
         j = jobs.get(job_id)
         if j:
             j.update(kw)
-            # Persist whenever a job reaches a terminal state
             if kw.get("status") in ("done", "error"):
-                _persist()
+                should_persist = True
+    # Persist outside the lock to avoid deadlock
+    if should_persist:
+        _persist()
 
 
 # ── Conversion ────────────────────────────────────────────────────────────────
@@ -351,31 +357,57 @@ def ai_action():
         ),
     }
 
-    try:
-        import urllib.request as urlreq
+    import urllib.request as urlreq
+    import urllib.error as urlerr
 
-        payload = json.dumps(
-            {
-                "model": AI_MODEL,
-                "messages": [
-                    {"role": "user", "content": prompts.get(mode, prompts["summarize"])}
-                ],
-                "stream": False,
-            }
-        ).encode()
-        req = urlreq.Request(
-            f"{AI_BASE_URL.rstrip('/')}/chat/completions",
-            data=payload,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {AI_API_KEY}",
-            },
-            method="POST",
-        )
+    payload = json.dumps(
+        {
+            "model": AI_MODEL,
+            "messages": [
+                {"role": "user", "content": prompts.get(mode, prompts["summarize"])}
+            ],
+            "stream": False,
+        }
+    ).encode()
+
+    url = f"{AI_BASE_URL.rstrip('/')}/chat/completions"
+    req = urlreq.Request(
+        url,
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {AI_API_KEY}",
+        },
+        method="POST",
+    )
+
+    try:
         with urlreq.urlopen(req, timeout=120) as resp:
             result = json.loads(resp.read())
         return jsonify({"result": result["choices"][0]["message"]["content"]})
+
+    except urlerr.HTTPError as e:
+        body = e.read().decode(errors="replace")
+        print(f"[ai] HTTP {e.code} from {url}: {body}")
+        return jsonify({"error": f"Ollama returned HTTP {e.code}", "detail": body}), 503
+
+    except urlerr.URLError as e:
+        print(f"[ai] Cannot reach Ollama at {url}: {e.reason}")
+        return (
+            jsonify(
+                {
+                    "error": f"Cannot reach Ollama — is it running?",
+                    "detail": str(e.reason),
+                    "hint": "Run: ollama serve",
+                }
+            ),
+            503,
+        )
+
     except Exception as e:
+        import traceback
+
+        print(f"[ai] Unexpected error: {traceback.format_exc()}")
         return jsonify({"error": f"AI request failed: {e}"}), 503
 
 
