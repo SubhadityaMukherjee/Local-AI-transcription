@@ -325,7 +325,8 @@ def list_jobs():
 def ai_action():
     data = request.get_json(force=True)
     text = (data.get("text") or "").strip()
-    mode = data.get("mode", "summarize")
+    mode = data.get("mode", "summarize")  # 'summarize' | 'grammar'
+    job_id = data.get("job_id")  # optional — if set, result is saved to job
 
     if not text:
         return jsonify({"error": "No text"}), 400
@@ -384,7 +385,25 @@ def ai_action():
     try:
         with urlreq.urlopen(req, timeout=120) as resp:
             result = json.loads(resp.read())
-        return jsonify({"result": result["choices"][0]["message"]["content"]})
+        reply = result["choices"][0]["message"]["content"]
+
+        # Save to job if job_id provided
+        if job_id:
+            with _lock:
+                j = jobs.get(job_id)
+                if j:
+                    if "ai_results" not in j:
+                        j["ai_results"] = []
+                    j["ai_results"].append(
+                        {
+                            "mode": mode,
+                            "text": reply,
+                            "created_at": time.time(),
+                        }
+                    )
+            _persist()
+
+        return jsonify({"result": reply})
 
     except urlerr.HTTPError as e:
         body = e.read().decode(errors="replace")
@@ -438,6 +457,21 @@ def debug(job_id):
             "cmd": f"{WHISPER_BIN} --model {WHISPER_MODEL} --file <wav> --output-txt --threads {max(4, __import__('os').cpu_count() or 4)}",
         }
     )
+
+
+@app.route("/api/jobs/<job_id>/ai/<int:idx>", methods=["DELETE"])
+def delete_ai_result(job_id, idx):
+    with _lock:
+        j = jobs.get(job_id)
+        if not j:
+            return jsonify({"error": "Not found"}), 404
+        ai_results = j.get("ai_results", [])
+        if idx < 0 or idx >= len(ai_results):
+            return jsonify({"error": "Index out of range"}), 400
+        ai_results.pop(idx)
+        j["ai_results"] = ai_results
+    _persist()
+    return jsonify({"ai_results": ai_results})
 
 
 @app.route("/api/jobs/<job_id>", methods=["DELETE"])

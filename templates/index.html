@@ -21,21 +21,15 @@
         --green: #5ce08a;
         --text: #f0ede8;
         --muted: #7a7880;
-        --mono: "DM Mono", monospace;
+        --mono: 'DM Mono', monospace;
       }
 
-      *,
-      *::before,
-      *::after {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-      }
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
       body {
         background: var(--bg);
         color: var(--text);
-        font-family: "DM Sans", sans-serif;
+        font-family: 'DM Sans', sans-serif;
         font-weight: 300;
         min-height: 100vh;
         overflow-x: hidden;
@@ -43,7 +37,7 @@
 
       /* Noise texture overlay */
       body::before {
-        content: "";
+        content: '';
         position: fixed;
         inset: 0;
         background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
@@ -61,7 +55,7 @@
       }
 
       h1 {
-        font-family: "DM Serif Display", serif;
+        font-family: 'DM Serif Display', serif;
         font-size: 2rem;
         font-weight: 400;
         color: var(--accent);
@@ -108,7 +102,7 @@
       }
 
       .section-label::after {
-        content: "";
+        content: '';
         flex: 1;
         height: 1px;
         background: var(--border);
@@ -164,15 +158,9 @@
       }
 
       @keyframes pulse-ring {
-        0% {
-          box-shadow: 0 0 0 0 rgba(224, 92, 92, 0.4);
-        }
-        70% {
-          box-shadow: 0 0 0 16px rgba(224, 92, 92, 0);
-        }
-        100% {
-          box-shadow: 0 0 0 0 rgba(224, 92, 92, 0);
-        }
+        0% { box-shadow: 0 0 0 0 rgba(224, 92, 92, 0.4); }
+        70% { box-shadow: 0 0 0 16px rgba(224, 92, 92, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(224, 92, 92, 0); }
       }
 
       .record-status {
@@ -214,8 +202,7 @@
         position: relative;
       }
 
-      .upload-zone:hover,
-      .upload-zone.drag-over {
+      .upload-zone:hover, .upload-zone.drag-over {
         border-color: var(--accent2);
         background: rgba(232, 213, 176, 0.04);
       }
@@ -227,15 +214,8 @@
         cursor: pointer;
       }
 
-      .upload-icon {
-        font-size: 1.8rem;
-        margin-bottom: 0.5rem;
-      }
-      .upload-hint {
-        font-size: 0.78rem;
-        color: var(--muted);
-        margin-top: 0.3rem;
-      }
+      .upload-icon { font-size: 1.8rem; margin-bottom: 0.5rem; }
+      .upload-hint { font-size: 0.78rem; color: var(--muted); margin-top: 0.3rem; }
 
       /* JOBS LIST */
       .jobs-list {
@@ -248,7 +228,7 @@
       }
 
       .jobs-list:empty::after {
-        content: "No jobs yet";
+        content: 'No jobs yet';
         font-family: var(--mono);
         font-size: 0.75rem;
         color: var(--muted);
@@ -268,13 +248,8 @@
         overflow: hidden;
       }
 
-      .job-item:hover {
-        border-color: var(--accent2);
-      }
-      .job-item.active {
-        border-color: var(--accent);
-        background: rgba(232, 213, 176, 0.05);
-      }
+      .job-item:hover { border-color: var(--accent2); }
+      .job-item.active { border-color: var(--accent); background: rgba(232, 213, 176, 0.05); }
 
       .job-name {
         font-size: 0.82rem;
@@ -300,26 +275,11 @@
         text-transform: uppercase;
       }
 
-      .status-queued {
-        background: rgba(122, 120, 128, 0.2);
-        color: var(--muted);
-      }
-      .status-converting {
-        background: rgba(232, 213, 176, 0.1);
-        color: var(--accent2);
-      }
-      .status-transcribing {
-        background: rgba(92, 224, 138, 0.1);
-        color: var(--green);
-      }
-      .status-done {
-        background: rgba(92, 224, 138, 0.15);
-        color: var(--green);
-      }
-      .status-error {
-        background: rgba(224, 92, 92, 0.15);
-        color: var(--red);
-      }
+      .status-queued    { background: rgba(122,120,128,0.2); color: var(--muted); }
+      .status-converting{ background: rgba(232,213,176,0.1); color: var(--accent2); }
+      .status-transcribing{ background: rgba(92,224,138,0.1); color: var(--green); }
+      .status-done      { background: rgba(92,224,138,0.15); color: var(--green); }
+      .status-error     { background: rgba(224,92,92,0.15); color: var(--red); }
 
       .job-progress {
         position: absolute;
@@ -341,16 +301,10 @@
         border-radius: 3px;
         line-height: 1;
         opacity: 0;
-        transition:
-          opacity 0.15s,
-          color 0.15s;
+        transition: opacity 0.15s, color 0.15s;
       }
-      .job-item:hover .job-delete {
-        opacity: 1;
-      }
-      .job-delete:hover {
-        color: var(--red);
-      }
+      .job-item:hover .job-delete { opacity: 1; }
+      .job-delete:hover { color: var(--red); }
 
       /* RIGHT PANEL */
       .panel-right {
@@ -368,7 +322,7 @@
       }
 
       .btn {
-        font-family: "DM Sans", sans-serif;
+        font-family: 'DM Sans', sans-serif;
         font-size: 0.78rem;
         font-weight: 500;
         padding: 0.45rem 1rem;
@@ -385,14 +339,8 @@
         white-space: nowrap;
       }
 
-      .btn:hover {
-        border-color: var(--accent2);
-        color: var(--accent);
-      }
-      .btn:disabled {
-        opacity: 0.4;
-        cursor: not-allowed;
-      }
+      .btn:hover { border-color: var(--accent2); color: var(--accent); }
+      .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
       .btn-primary {
         background: var(--accent);
@@ -400,25 +348,16 @@
         border-color: var(--accent);
         font-weight: 600;
       }
-      .btn-primary:hover {
-        background: var(--accent2);
-        border-color: var(--accent2);
-        color: #0e0e0f;
-      }
+      .btn-primary:hover { background: var(--accent2); border-color: var(--accent2); color: #0e0e0f; }
 
       .btn-ghost {
         background: transparent;
         border-color: transparent;
         color: var(--muted);
       }
-      .btn-ghost:hover {
-        border-color: var(--border);
-        color: var(--text);
-      }
+      .btn-ghost:hover { border-color: var(--border); color: var(--text); }
 
-      .spacer {
-        flex: 1;
-      }
+      .spacer { flex: 1; }
 
       .editor-area {
         flex: 1;
@@ -439,15 +378,13 @@
       }
 
       .empty-glyph {
-        font-family: "DM Serif Display", serif;
+        font-family: 'DM Serif Display', serif;
         font-size: 4rem;
         color: var(--border);
         line-height: 1;
       }
 
-      .empty-text {
-        font-size: 0.88rem;
-      }
+      .empty-text { font-size: 0.88rem; }
 
       #transcript-editor {
         flex: 1;
@@ -457,7 +394,7 @@
         outline: none;
         resize: none;
         color: var(--text);
-        font-family: "DM Sans", sans-serif;
+        font-family: 'DM Sans', sans-serif;
         font-size: 0.95rem;
         line-height: 1.8;
         font-weight: 300;
@@ -476,9 +413,7 @@
         backdrop-filter: blur(4px);
       }
 
-      .processing-overlay.active {
-        display: flex;
-      }
+      .processing-overlay.active { display: flex; }
 
       .spinner {
         width: 40px;
@@ -489,11 +424,7 @@
         animation: spin 0.8s linear infinite;
       }
 
-      @keyframes spin {
-        to {
-          transform: rotate(360deg);
-        }
-      }
+      @keyframes spin { to { transform: rotate(360deg); } }
 
       .processing-label {
         font-family: var(--mono);
@@ -525,24 +456,12 @@
         max-width: 320px;
       }
 
-      .toast.error {
-        border-color: var(--red);
-        color: var(--red);
-      }
-      .toast.success {
-        border-color: var(--green);
-        color: var(--green);
-      }
+      .toast.error { border-color: var(--red); color: var(--red); }
+      .toast.success { border-color: var(--green); color: var(--green); }
 
       @keyframes slide-up {
-        from {
-          opacity: 0;
-          transform: translateY(12px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
+        from { opacity: 0; transform: translateY(12px); }
+        to { opacity: 1; transform: translateY(0); }
       }
 
       .char-count {
@@ -552,14 +471,89 @@
         margin-left: auto;
       }
 
-      @media (max-width: 768px) {
-        .layout {
-          grid-template-columns: 1fr;
-        }
-        .panel-left {
-          border-right: none;
-          border-bottom: 1px solid var(--border);
-        }
+      /* AI Results */
+      .ai-results {
+        border-top: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+      }
+
+      .ai-result-block {
+        border-bottom: 1px solid var(--border);
+        animation: fade-in 0.3s ease;
+      }
+
+      @keyframes fade-in {
+        from { opacity: 0; transform: translateY(6px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+
+      .ai-result-header {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        padding: 0.75rem 2.5rem;
+        background: var(--surface);
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .ai-result-header:hover { background: var(--surface2); }
+
+      .ai-result-badge {
+        font-family: var(--mono);
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        padding: 2px 8px;
+        border-radius: 100px;
+      }
+
+      .badge-summarize { background: rgba(232,213,176,0.12); color: var(--accent2); }
+      .badge-grammar   { background: rgba(92,224,138,0.1);   color: var(--green); }
+
+      .ai-result-time {
+        font-family: var(--mono);
+        font-size: 0.68rem;
+        color: var(--muted);
+        margin-left: auto;
+      }
+
+      .ai-result-delete {
+        background: none;
+        border: none;
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 0.75rem;
+        padding: 2px 6px;
+        border-radius: 3px;
+        opacity: 0;
+        transition: opacity 0.15s, color 0.15s;
+      }
+      .ai-result-header:hover .ai-result-delete { opacity: 1; }
+      .ai-result-delete:hover { color: var(--red); }
+
+      .ai-result-body {
+        padding: 1rem 2.5rem 1.5rem;
+        font-size: 0.92rem;
+        line-height: 1.8;
+        font-weight: 300;
+        white-space: pre-wrap;
+        color: var(--text);
+      }
+
+      .ai-result-body.collapsed { display: none; }
+
+      .ai-result-actions {
+        display: flex;
+        gap: 0.5rem;
+        padding: 0 2.5rem 1rem;
+      }
+
+      @media (max-width: 768px) {  @media (max-width: 768px) {
+        .layout { grid-template-columns: 1fr; }
+        .panel-left { border-right: none; border-bottom: 1px solid var(--border); }
       }
     </style>
   </head>
@@ -632,6 +626,8 @@
             spellcheck="true"
             placeholder="Transcript will appear here…"
           ></textarea>
+
+          <div class="ai-results" id="ai-results"></div>
 
           <div class="processing-overlay" id="processing-overlay">
             <div class="spinner"></div>
@@ -917,7 +913,7 @@
             if (job.status === "done") {
               toast("Transcription complete!", "success");
               if (activeJobId === id || !activeJobId) {
-                showTranscript(job.transcript);
+                showTranscript(job.transcript, job.ai_results);
                 selectJob(id);
               }
             } else {
@@ -933,13 +929,14 @@
       }
 
       // ─── Transcript Editor ────────────────────────────────────────────────────────
-      function showTranscript(text) {
+      function showTranscript(text, aiResults) {
         emptyState.style.display = "none";
         processingOverlay.classList.remove("active");
         editor.style.display = "block";
         editor.value = text;
         updateCharCount();
         setEditorButtons(true);
+        renderAiResults(aiResults || []);
       }
 
       function showProcessing(label) {
@@ -947,6 +944,7 @@
         processingOverlay.classList.add("active");
         processingLabel.textContent = label + "…";
         editor.style.display = "none";
+        document.getElementById("ai-results").innerHTML = "";
         setEditorButtons(false);
       }
 
