@@ -260,12 +260,21 @@ def transcribe(wav: Path, job_id: str) -> str:
 def process_job(job_id: str, src: Path):
     wav = UPLOAD_DIR / f"{job_id}.wav"
     try:
+        print(f"[job:{job_id[:8]}] converting {src.name} ({src.stat().st_size} bytes)")
         _upd(job_id, status="converting", progress=5)
         to_wav(src, wav)
+        print(f"[job:{job_id[:8]}] converted → {wav.name} ({wav.stat().st_size} bytes)")
+
         _upd(job_id, status="transcribing", progress=30)
+        print(f"[job:{job_id[:8]}] transcribing…")
         text = transcribe(wav, job_id)
+        print(f"[job:{job_id[:8]}] done — {len(text)} chars")
         _upd(job_id, status="done", progress=100, transcript=text)
     except Exception as e:
+        import traceback
+
+        print(f"[job:{job_id[:8]}] ERROR: {e}")
+        traceback.print_exc()
         _upd(job_id, status="error", error=str(e))
     finally:
         src.unlink(missing_ok=True)
@@ -300,10 +309,30 @@ def upload():
 def record():
     blob = request.files.get("audio")
     if not blob:
+        print("[record] ERROR: no audio field in request")
         return jsonify({"error": "No audio"}), 400
-    job = new_job("recording.webm")
-    dest = UPLOAD_DIR / f"{job['id']}.webm"
+
+    # Detect extension from mime type sent by browser
+    mime = blob.mimetype or blob.content_type or ""
+    ext = "mp4" if "mp4" in mime else "ogg" if "ogg" in mime else "webm"
+    filename = f"recording.{ext}"
+
+    job = new_job(filename)
+    dest = UPLOAD_DIR / f"{job['id']}.{ext}"
     blob.save(dest)
+
+    size = dest.stat().st_size
+    print(f"[record] saved {filename} → {dest.name} ({size} bytes, mime={mime})")
+
+    if size < 1000:
+        dest.unlink(missing_ok=True)
+        _upd(
+            job["id"],
+            status="error",
+            error=f"Recording too small ({size} bytes) — was the mic captured?",
+        )
+        return jsonify({"job_id": job["id"]})
+
     start_job(job, dest)
     return jsonify({"job_id": job["id"]})
 
@@ -352,8 +381,9 @@ def ai_action():
             "Use bullet points for key points.\n\n" + text
         ),
         "grammar": (
-            "Fix all grammar, spelling, capitalizationa and punctuation issues. DO NOT REWRITE TEXT. You can reflow it if needed"
-            " do not add anything. Return the corrected text" + text
+            "Fix all grammar, spelling, punctuation and sentence structure issues. "
+            "Preserve the original meaning and tone. Return only the corrected text.\n\n"
+            + text
         ),
     }
 

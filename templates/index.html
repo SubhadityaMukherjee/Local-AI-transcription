@@ -404,12 +404,12 @@
       .processing-overlay {
         position: absolute;
         inset: 0;
-        background: rgba(14, 14, 15, 0.85);
+        background: rgba(14, 14, 15, 0.88);
         display: none;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 1rem;
+        gap: 1.2rem;
         backdrop-filter: blur(4px);
       }
 
@@ -425,6 +425,55 @@
       }
 
       @keyframes spin { to { transform: rotate(360deg); } }
+
+      .progress-block {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.6rem;
+        width: 280px;
+      }
+
+      .progress-bar-track {
+        width: 100%;
+        height: 3px;
+        background: var(--border);
+        border-radius: 2px;
+        overflow: hidden;
+      }
+
+      .progress-bar-fill {
+        height: 100%;
+        background: var(--accent);
+        border-radius: 2px;
+        transition: width 0.6s ease;
+        width: 0%;
+      }
+
+      .progress-meta {
+        display: flex;
+        justify-content: space-between;
+        width: 100%;
+      }
+
+      .progress-pct {
+        font-family: var(--mono);
+        font-size: 0.75rem;
+        color: var(--accent);
+      }
+
+      .progress-elapsed {
+        font-family: var(--mono);
+        font-size: 0.75rem;
+        color: var(--muted);
+      }
+
+      .progress-last-update {
+        font-family: var(--mono);
+        font-size: 0.65rem;
+        color: var(--muted);
+        opacity: 0.6;
+      }
 
       .processing-label {
         font-family: var(--mono);
@@ -634,6 +683,16 @@
             <div class="processing-label" id="processing-label">
               Processing…
             </div>
+            <div class="progress-block">
+              <div class="progress-bar-track">
+                <div class="progress-bar-fill" id="progress-bar-fill"></div>
+              </div>
+              <div class="progress-meta">
+                <span class="progress-pct" id="progress-pct"></span>
+                <span class="progress-elapsed" id="progress-elapsed"></span>
+              </div>
+              <div class="progress-last-update" id="progress-last-update"></div>
+            </div>
           </div>
         </div>
       </main>
@@ -652,6 +711,10 @@
       let animFrame = null;
       let activeJobId = null;
       let pollInterval = null;
+      let jobStartTime = {}; // job_id -> Date.now() when we started watching
+      let lastUpdateTime = {}; // job_id -> Date.now() of last progress change
+      let lastProgress = {}; // job_id -> last seen progress value
+      let elapsedInterval = null; // interval for updating elapsed timer
 
       // ─── DOM ─────────────────────────────────────────────────────────────────────
       const recordBtn = document.getElementById("record-btn");
@@ -692,13 +755,35 @@
         }
       }
 
+      // Pick the best supported mimeType for this browser (Safari needs mp4)
+      function getSupportedMimeType() {
+        const candidates = [
+          "audio/webm;codecs=opus",
+          "audio/webm",
+          "audio/mp4",
+          "audio/ogg;codecs=opus",
+          "audio/ogg",
+        ];
+        for (const t of candidates) {
+          if (MediaRecorder.isTypeSupported(t)) {
+            console.log("[record] using mimeType:", t);
+            return t;
+          }
+        }
+        console.warn(
+          "[record] no preferred mimeType supported, using browser default",
+        );
+        return "";
+      }
+
       async function startRecording() {
         try {
           recordStream = await navigator.mediaDevices.getUserMedia({
             audio: true,
           });
         } catch (e) {
-          toast("Microphone access denied", "error");
+          toast(`Microphone access denied: ${e.message}`, "error");
+          console.error("[record] getUserMedia failed:", e);
           return;
         }
 
@@ -710,14 +795,31 @@
         source.connect(analyser);
         drawWaveform();
 
-        mediaRecorder = new MediaRecorder(recordStream, {
-          mimeType: "audio/webm",
-        });
+        const mimeType = getSupportedMimeType();
+        const options = mimeType ? { mimeType } : {};
+        try {
+          mediaRecorder = new MediaRecorder(recordStream, options);
+        } catch (e) {
+          console.error("[record] MediaRecorder init failed:", e);
+          toast(`Recording not supported: ${e.message}`, "error");
+          return;
+        }
+
+        console.log("[record] started, mimeType:", mediaRecorder.mimeType);
         mediaRecorder.ondataavailable = (e) => {
-          if (e.data.size > 0) recordChunks.push(e.data);
+          if (e.data && e.data.size > 0) {
+            recordChunks.push(e.data);
+            console.log(
+              `[record] chunk ${recordChunks.length}: ${e.data.size} bytes`,
+            );
+          }
         };
         mediaRecorder.onstop = submitRecording;
-        mediaRecorder.start(100);
+        mediaRecorder.onerror = (e) => {
+          console.error("[record] MediaRecorder error:", e);
+          toast(`Recording error: ${e.error?.message || e}`, "error");
+        };
+        mediaRecorder.start(250); // chunk every 250ms
 
         recordStart = Date.now();
         timerInterval = setInterval(updateTimer, 500);
@@ -727,38 +829,62 @@
       }
 
       function stopRecording() {
-        if (mediaRecorder) mediaRecorder.stop();
+        if (mediaRecorder && mediaRecorder.state !== "inactive")
+          mediaRecorder.stop();
         if (recordStream) recordStream.getTracks().forEach((t) => t.stop());
         clearInterval(timerInterval);
         cancelAnimationFrame(animFrame);
         recordBtn.classList.remove("recording");
-        statusEl.textContent = "Processing…";
+        statusEl.textContent = "Uploading…";
         statusEl.classList.remove("active");
         timerEl.textContent = "";
         ctx2d.clearRect(0, 0, waveformCanvas.width, waveformCanvas.height);
       }
 
       async function submitRecording() {
-        const blob = new Blob(recordChunks, { type: "audio/webm" });
+        const mimeType = mediaRecorder?.mimeType || "audio/webm";
+        const ext = mimeType.includes("mp4")
+          ? "mp4"
+          : mimeType.includes("ogg")
+            ? "ogg"
+            : "webm";
+        const blob = new Blob(recordChunks, { type: mimeType });
+
+        console.log(
+          `[record] submitting: ${recordChunks.length} chunks, ${blob.size} bytes, type: ${mimeType}`,
+        );
+
+        if (blob.size < 1000) {
+          toast("Recording too short or empty — try again", "error");
+          statusEl.textContent = "Click to start recording";
+          return;
+        }
+
         const fd = new FormData();
-        fd.append("audio", blob, "recording.webm");
+        fd.append("audio", blob, `recording.${ext}`);
 
         try {
           const res = await fetch("/api/record", { method: "POST", body: fd });
           const data = await res.json();
+          console.log("[record] server response:", data);
           if (data.job_id) {
             addJob({
               id: data.job_id,
-              filename: "recording.webm",
+              filename: `recording.${ext}`,
               status: "queued",
               progress: 0,
             });
             watchJob(data.job_id);
+            selectJob(data.job_id);
             toast("Recording submitted");
+          } else {
+            toast(`Server error: ${data.error}`, "error");
           }
         } catch (e) {
-          toast("Upload failed", "error");
+          console.error("[record] upload failed:", e);
+          toast(`Upload failed: ${e.message}`, "error");
         }
+        statusEl.textContent = "Click to start recording";
         statusEl.textContent = "Click to start recording";
       }
 
@@ -904,12 +1030,28 @@
       }
 
       function watchJob(id) {
+        if (!jobStartTime[id]) jobStartTime[id] = Date.now();
+        if (!lastUpdateTime[id]) lastUpdateTime[id] = Date.now();
+
+        if (activeJobId === id) startElapsedTimer(id);
+
         const poll = setInterval(async () => {
           const res = await fetch(`/api/status/${id}`);
           const job = await res.json();
           updateJobEl(job);
+
+          // Track when progress actually changes
+          if (job.progress !== lastProgress[id]) {
+            lastProgress[id] = job.progress;
+            lastUpdateTime[id] = Date.now();
+          }
+
           if (job.status === "done" || job.status === "error") {
             clearInterval(poll);
+            stopElapsedTimer();
+            delete jobStartTime[id];
+            delete lastUpdateTime[id];
+            delete lastProgress[id];
             if (job.status === "done") {
               toast("Transcription complete!", "success");
               if (activeJobId === id || !activeJobId) {
@@ -922,7 +1064,7 @@
             }
           } else {
             if (activeJobId === id) {
-              processingLabel.textContent = `${job.status}… ${job.progress}%`;
+              updateProgressUI(job.status, job.progress);
             }
           }
         }, 1500);
@@ -939,13 +1081,58 @@
         renderAiResults(aiResults || []);
       }
 
-      function showProcessing(label) {
+      function showProcessing(label, pct) {
         emptyState.style.display = "none";
         processingOverlay.classList.add("active");
-        processingLabel.textContent = label + "…";
         editor.style.display = "none";
         document.getElementById("ai-results").innerHTML = "";
         setEditorButtons(false);
+        updateProgressUI(label, pct || 0);
+      }
+
+      function updateProgressUI(label, pct) {
+        const stageMap = {
+          queued: "Queued…",
+          converting: "Converting to audio…",
+          transcribing: "Transcribing…",
+        };
+        processingLabel.textContent = stageMap[label] || label + "…";
+        document.getElementById("progress-bar-fill").style.width = pct + "%";
+        document.getElementById("progress-pct").textContent =
+          pct > 0 ? pct + "%" : "";
+      }
+
+      function startElapsedTimer(jobId) {
+        clearInterval(elapsedInterval);
+        elapsedInterval = setInterval(() => {
+          const start = jobStartTime[jobId];
+          if (!start) return;
+          const elapsed = Math.floor((Date.now() - start) / 1000);
+          const m = String(Math.floor(elapsed / 60)).padStart(2, "0");
+          const s = String(elapsed % 60).padStart(2, "0");
+          document.getElementById("progress-elapsed").textContent = `${m}:${s}`;
+
+          // Show a "last update" warning if progress hasn't changed in >10s
+          const lastUpd = lastUpdateTime[jobId];
+          if (lastUpd) {
+            const stale = Math.floor((Date.now() - lastUpd) / 1000);
+            const el = document.getElementById("progress-last-update");
+            if (stale > 10) {
+              el.textContent = `last update ${stale}s ago`;
+              el.style.color = stale > 30 ? "var(--red)" : "var(--muted)";
+            } else {
+              el.textContent = "";
+            }
+          }
+        }, 1000);
+      }
+
+      function stopElapsedTimer() {
+        clearInterval(elapsedInterval);
+        document.getElementById("progress-elapsed").textContent = "";
+        document.getElementById("progress-last-update").textContent = "";
+        document.getElementById("progress-pct").textContent = "";
+        document.getElementById("progress-bar-fill").style.width = "0%";
       }
 
       function hideProcessing() {
