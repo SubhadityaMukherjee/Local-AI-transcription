@@ -3,6 +3,8 @@ vendor/whisper.cpp/models/*.bin
 vendor/whisper.cpp/models/*.mlmodelc
 .DS_Store
 store/
+outputs/
+recordings/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

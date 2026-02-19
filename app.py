@@ -33,9 +33,11 @@ VENDOR_DIR = BASE_DIR / "vendor" / "whisper.cpp"
 UPLOAD_DIR = BASE_DIR / "uploads"
 OUTPUT_DIR = BASE_DIR / "outputs"
 STORE_DIR = BASE_DIR / "store"
+RECORDINGS_DIR = BASE_DIR / "recordings"
 UPLOAD_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
 STORE_DIR.mkdir(exist_ok=True)
+RECORDINGS_DIR.mkdir(exist_ok=True)
 
 JOBS_FILE = STORE_DIR / "jobs.json"
 
@@ -315,14 +317,26 @@ def record():
     # Detect extension from mime type sent by browser
     mime = blob.mimetype or blob.content_type or ""
     ext = "mp4" if "mp4" in mime else "ogg" if "ogg" in mime else "webm"
-    filename = f"recording.{ext}"
 
-    job = new_job(filename)
+    # Timestamp-based name so it's easy to find and retry manually
+    ts = time.strftime("%Y%m%d_%H%M%S")
+    job = new_job(f"recording_{ts}.{ext}")
+    filename = f'{ts}_{job["id"][:8]}.{ext}'
+
+    # Save a permanent copy to recordings/
+    saved = RECORDINGS_DIR / filename
+    blob.save(saved)
+    size = saved.stat().st_size
+    print(f"[record] saved → recordings/{filename} ({size} bytes, mime={mime})")
+
+    # Also copy to uploads/ for the worker to consume
+    import shutil
+
     dest = UPLOAD_DIR / f"{job['id']}.{ext}"
-    blob.save(dest)
+    shutil.copy2(saved, dest)
 
-    size = dest.stat().st_size
-    print(f"[record] saved {filename} → {dest.name} ({size} bytes, mime={mime})")
+    # Store the recording path on the job so it survives errors
+    _upd(job["id"], recording=str(saved.relative_to(BASE_DIR)))
 
     if size < 1000:
         dest.unlink(missing_ok=True)
@@ -381,9 +395,11 @@ def ai_action():
             "Use bullet points for key points.\n\n" + text
         ),
         "grammar": (
-            "Fix all grammar, spelling, punctuation and sentence structure issues. "
-            "Preserve the original meaning and tone. Return only the corrected text.\n\n"
-            + text
+            "Fix all grammar, spelling, punctuation. You can fix numbering if needed."
+            "Do not add new words or text that I did not use. Reflow the text if needed."
+            "Do not remove anything I said. If something I said looks like a list, then you can make it into one."
+            "Preseve the same format for lists (keep other text as is), use markdown. Reflow whatever is needed."
+            "Return only the corrected text.\n\n" + text
         ),
     }
 
@@ -457,6 +473,19 @@ def ai_action():
 
         print(f"[ai] Unexpected error: {traceback.format_exc()}")
         return jsonify({"error": f"AI request failed: {e}"}), 503
+
+
+@app.route("/api/jobs/<job_id>/download")
+def download_recording(job_id):
+    j = jobs.get(job_id)
+    if not j or not j.get("recording"):
+        return jsonify({"error": "No recording saved for this job"}), 404
+    path = BASE_DIR / j["recording"]
+    if not path.exists():
+        return jsonify({"error": "Recording file not found on disk"}), 404
+    from flask import send_file
+
+    return send_file(path, as_attachment=True, download_name=path.name)
 
 
 @app.route("/api/info")

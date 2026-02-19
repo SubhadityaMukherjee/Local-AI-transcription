@@ -290,8 +290,21 @@
         transition: width 0.5s ease;
       }
 
-      .job-delete {
+      .job-download {
         margin-left: auto;
+        color: var(--muted);
+        font-size: 0.75rem;
+        text-decoration: none;
+        padding: 2px 4px;
+        border-radius: 3px;
+        opacity: 0;
+        transition: opacity 0.15s, color 0.15s;
+      }
+      .job-item:hover .job-download { opacity: 1; }
+      .job-download:hover { color: var(--accent); }
+
+      .job-delete {
+        margin-left: 0;
         background: none;
         border: none;
         color: var(--muted);
@@ -962,10 +975,12 @@
         const el = document.createElement("div");
         el.className = "job-item";
         el.dataset.id = job.id;
+        const hasRecording = !!job.recording;
         el.innerHTML = `
     <div class="job-name">${job.filename}</div>
     <div class="job-meta">
       <span class="job-status status-${job.status}">${job.status}</span>
+      ${hasRecording ? `<a class="job-download" href="/api/jobs/${job.id}/download" title="Download recording" download>⬇</a>` : ""}
       <button class="job-delete" title="Delete" data-id="${job.id}">✕</button>
     </div>
     <div class="job-progress" style="width:${job.progress || 0}%"></div>
@@ -974,6 +989,11 @@
           e.stopPropagation();
           deleteJob(job.id);
         });
+        if (hasRecording) {
+          el.querySelector(".job-download").addEventListener("click", (e) =>
+            e.stopPropagation(),
+          );
+        }
         el.addEventListener("click", () => selectJob(job.id));
         jobsList.prepend(el);
         jobElements[job.id] = el;
