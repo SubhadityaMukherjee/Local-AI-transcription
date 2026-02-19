@@ -637,17 +637,21 @@
           });
           const block = document.createElement("div");
           block.className = "ai-result-block";
+
           block.innerHTML = `
-            <div class="ai-result-header">
-              <span class="ai-result-badge ${badgeCls}">${label}</span>
-              <span class="ai-result-time">${timeStr}</span>
-              <button class="ai-result-delete" title="Delete">✕</button>
-            </div>
-            <div class="ai-result-body">${escHtml(r.text)}</div>
-            <div class="ai-result-actions">
-              <button class="btn btn-ghost ai-copy-btn">⎘ Copy</button>
-              <button class="btn btn-ghost ai-export-btn">↓ Export .md</button>
-            </div>`;
+              <div class="ai-result-header">
+                <span class="ai-result-badge ${badgeCls}">${label}</span>
+                <span class="ai-result-time">${timeStr}</span>
+                <button class="ai-result-delete" title="Delete">✕</button>
+              </div>
+              <div class="ai-result-body">${escHtml(r.text)}</div>
+              <div class="ai-result-progress">
+                <div class="ai-result-progress-fill" style="width: ${r.progress || 0}%"></div>
+              </div>
+              <div class="ai-result-actions">
+                <button class="btn btn-ghost ai-copy-btn">⎘ Copy</button>
+                <button class="btn btn-ghost ai-export-btn">↓ Export .md</button>
+              </div>`;
 
           block
             .querySelector(".ai-result-header")
@@ -758,6 +762,17 @@
           /* server not ready */
         }
       })();
+      function updateAiProgress(idx, pct) {
+        const block = aiResultsPanel.querySelectorAll(".ai-result-block")[idx];
+        if (!block) return;
+        const fill = block.querySelector(".ai-result-progress-fill");
+        if (fill) fill.style.width = (pct || 0) + "%";
+      }
+
+      // Optional: call this after renderAiResults to initialize/update
+      function refreshAiProgress(job) {
+        job.ai_results?.forEach((r, idx) => updateAiProgress(idx, r.progress));
+      }
     </script>
   </body>
 </html>
