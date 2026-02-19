@@ -395,10 +395,11 @@ def ai_action():
             "Use bullet points for key points.\n\n" + text
         ),
         "grammar": (
-            "Fix all grammar, spelling, punctuation. You can fix numbering if needed."
-            "Do not add new words or text that I did not use. Reflow the text if needed."
+            "Fix all grammar, spaces, spelling, punctuation. You can fix numbering if needed."
+            "Do not add things I did not say, but fix my spelling if something was wrong. Reflow the text if needed."
             "Do not remove anything I said. If something I said looks like a list, then you can make it into one."
-            "Preseve the same format for lists (keep other text as is), use markdown. Reflow whatever is needed."
+            "Preseve the same format for lists (keep other text as is), use markdown. If I say next, add it to the next"
+            "list item, remove the word next. Of course not if its part of a sentece"
             "Return only the corrected text.\n\n" + text
         ),
     }
