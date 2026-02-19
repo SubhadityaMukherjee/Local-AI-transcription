@@ -9,7 +9,8 @@ class Config:
     """Application configuration."""
 
     def __init__(self):
-        self.BASE_DIR = Path(__file__).parent
+        # Backend folder is inside project root, so go up one level
+        self.BASE_DIR = Path(__file__).parent.parent
         self.VENDOR_DIR = self.BASE_DIR / "vendor" / "whisper.cpp"
         self.UPLOAD_DIR = self.BASE_DIR / "uploads"
         self.OUTPUT_DIR = self.BASE_DIR / "outputs"

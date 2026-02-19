@@ -4,11 +4,11 @@ Transcription via whisper.cpp (submodule at vendor/whisper.cpp),
 built with CoreML + Metal for macOS acceleration.
 """
 
-from config import Config
-from job_store import JobStore
-from transcription_service import TranscriptionService
-from ai_service import AIService
-from routes import register_routes
+from backend.config import Config
+from backend.job_store import JobStore
+from backend.transcription_service import TranscriptionService
+from backend.ai_service import AIService
+from backend.routes import register_routes
 
 # Initialize core components
 config = Config()
