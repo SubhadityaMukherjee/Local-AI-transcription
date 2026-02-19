@@ -81,6 +81,8 @@ class TranscriptionService:
         if txt.exists():
             text = txt.read_text().strip()
             txt.unlink(missing_ok=True)
+            # Join sentences that were split on newlines
+            text = " ".join(line.strip() for line in text.split("\n") if line.strip())
             return text
 
         raise RuntimeError("whisper-cli produced no output file")
