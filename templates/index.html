@@ -986,6 +986,89 @@
         toast("Exported as Markdown", "success");
       });
 
+      // ─── AI Results ───────────────────────────────────────────────────────────────
+      function escHtml(str) {
+        return str
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+
+      function renderAiResults(aiResults) {
+        const container = document.getElementById("ai-results");
+        container.innerHTML = "";
+        if (!aiResults || aiResults.length === 0) return;
+        aiResults.forEach((r, idx) => {
+          const label = r.mode === "summarize" ? "⚡ Summary" : "✦ Grammar Fix";
+          const badgeCls =
+            r.mode === "summarize" ? "badge-summarize" : "badge-grammar";
+          const timeStr = new Date(r.created_at * 1000).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+          const block = document.createElement("div");
+          block.className = "ai-result-block";
+          block.innerHTML = `
+      <div class="ai-result-header">
+        <span class="ai-result-badge ${badgeCls}">${label}</span>
+        <span class="ai-result-time">${timeStr}</span>
+        <button class="ai-result-delete" title="Delete">✕</button>
+      </div>
+      <div class="ai-result-body">${escHtml(r.text)}</div>
+      <div class="ai-result-actions">
+        <button class="btn btn-ghost ai-copy-btn">⎘ Copy</button>
+        <button class="btn btn-ghost ai-export-btn">↓ Export .md</button>
+      </div>
+    `;
+          block
+            .querySelector(".ai-result-header")
+            .addEventListener("click", (e) => {
+              if (e.target.classList.contains("ai-result-delete")) return;
+              block
+                .querySelector(".ai-result-body")
+                .classList.toggle("collapsed");
+              block
+                .querySelector(".ai-result-actions")
+                .classList.toggle("collapsed");
+            });
+          block.querySelector(".ai-copy-btn").addEventListener("click", () => {
+            navigator.clipboard
+              .writeText(r.text)
+              .then(() => toast("Copied!", "success"));
+          });
+          block
+            .querySelector(".ai-export-btn")
+            .addEventListener("click", () => {
+              const lbl = r.mode === "summarize" ? "Summary" : "Grammar-Fix";
+              const blob = new Blob([`# ${lbl}\n\n${r.text}\n`], {
+                type: "text/markdown",
+              });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `${lbl.toLowerCase()}.md`;
+              a.click();
+              URL.revokeObjectURL(url);
+              toast(`Exported ${lbl}`, "success");
+            });
+          block
+            .querySelector(".ai-result-delete")
+            .addEventListener("click", async (e) => {
+              e.stopPropagation();
+              if (!activeJobId) return;
+              const res = await fetch(`/api/jobs/${activeJobId}/ai/${idx}`, {
+                method: "DELETE",
+              });
+              if (res.ok) {
+                const data = await res.json();
+                renderAiResults(data.ai_results);
+                toast("Deleted", "success");
+              }
+            });
+          container.appendChild(block);
+        });
+      }
+
       async function aiAction(mode) {
         const text = editor.value;
         if (!text.trim()) return;
@@ -999,21 +1082,27 @@
           const res = await fetch("/api/ai", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text, mode }),
+            body: JSON.stringify({ text, mode, job_id: activeJobId }),
           });
           const data = await res.json();
           if (data.error) {
-            toast(data.hint || data.error, "error");
+            const msg = data.hint || data.detail || data.error;
+            toast(msg, "error");
+            console.error("[ai]", data);
           } else {
-            editor.value = data.result;
-            updateCharCount();
+            if (activeJobId) {
+              const jobRes = await fetch(`/api/status/${activeJobId}`);
+              const job = await jobRes.json();
+              renderAiResults(job.ai_results || []);
+            }
             toast(
-              `${mode === "summarize" ? "Summary" : "Grammar fix"} applied`,
+              `${mode === "summarize" ? "Summary" : "Grammar fix"} saved`,
               "success",
             );
           }
         } catch (e) {
-          toast("AI processing failed", "error");
+          toast(`AI request failed: ${e.message}`, "error");
+          console.error("[ai]", e);
         } finally {
           btn.disabled = false;
           btn.textContent = origText;

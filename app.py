@@ -352,9 +352,8 @@ def ai_action():
             "Use bullet points for key points.\n\n" + text
         ),
         "grammar": (
-            "Fix all grammar, spelling, punctuation and sentence structure issues. "
-            "Preserve the original meaning and tone. Return only the corrected text.\n\n"
-            + text
+            "Fix all grammar, spelling, capitalizationa and punctuation issues. DO NOT REWRITE TEXT. You can reflow it if needed"
+            " do not add anything. Return the corrected text" + text
         ),
     }
 
