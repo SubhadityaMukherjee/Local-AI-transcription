@@ -409,7 +409,7 @@ def ai_action():
             "3. Do NOT add new information.\n"
             "4. Preserve meaning exactly.\n"
             "5. Preserve existing structure unless it is clearly broken.\n"
-            "6. If text clearly represents a list, format it as a proper Markdown list.\n"
+            "6. If I say make it into a list, format whats below as a proper Markdown list.\n"
             "7. If the word 'next' appears at the beginning of a sentence and indicates the next list item, remove the word and merge it into the list structure.\n"
             "8. If 'next' is part of a normal sentence, keep it.\n"
             "9. Return ONLY the corrected text. No explanations.\n\n"
