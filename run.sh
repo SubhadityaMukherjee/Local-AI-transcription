@@ -21,4 +21,13 @@ echo "  Binary : $WHISPER_BIN"
 echo "  Model  : $WHISPER_MODEL"
 echo ""
 
-uv run app.py
+uv run app.py &
+SERVER_PID=$!
+
+# Open browser
+sleep 2
+open "http://127.0.0.1:5343/"
+
+# Wait for server; now Ctrl+C stops the server
+trap "echo 'Stopping server...'; kill $SERVER_PID; exit" SIGINT
+wait $SERVER_PID
