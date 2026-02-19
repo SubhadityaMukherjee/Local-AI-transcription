@@ -414,6 +414,7 @@ def ai_action():
             "8. If 'next' is part of a normal sentence, keep it.\n"
             "9. Return ONLY the corrected text. No explanations.\n\n"
             "10. Use - for markdown lists\n\n"
+            "11. Reflow the text properly\n"
             "Text:\n"
             f"{text}"
         ),

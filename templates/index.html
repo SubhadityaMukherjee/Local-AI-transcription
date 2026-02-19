@@ -9,615 +9,7 @@
       href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap"
       rel="stylesheet"
     />
-    <style>
-      :root {
-        --bg: #0e0e0f;
-        --surface: #17171a;
-        --surface2: #1f1f24;
-        --border: #2a2a32;
-        --accent: #e8d5b0;
-        --accent2: #c4a882;
-        --red: #e05c5c;
-        --green: #5ce08a;
-        --text: #f0ede8;
-        --muted: #7a7880;
-        --mono: 'DM Mono', monospace;
-      }
-
-      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-      body {
-        background: var(--bg);
-        color: var(--text);
-        font-family: 'DM Sans', sans-serif;
-        font-weight: 300;
-        min-height: 100vh;
-        overflow-x: hidden;
-      }
-
-      /* Noise texture overlay */
-      body::before {
-        content: '';
-        position: fixed;
-        inset: 0;
-        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
-        pointer-events: none;
-        z-index: 1000;
-        opacity: 0.4;
-      }
-
-      header {
-        padding: 2rem 3rem;
-        border-bottom: 1px solid var(--border);
-        display: flex;
-        align-items: baseline;
-        gap: 1.5rem;
-      }
-
-      h1 {
-        font-family: 'DM Serif Display', serif;
-        font-size: 2rem;
-        font-weight: 400;
-        color: var(--accent);
-        letter-spacing: -0.02em;
-      }
-
-      .subtitle {
-        font-size: 0.8rem;
-        color: var(--muted);
-        font-family: var(--mono);
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }
-
-      .layout {
-        display: grid;
-        grid-template-columns: 380px 1fr;
-        min-height: calc(100vh - 73px);
-      }
-
-      /* LEFT PANEL */
-      .panel-left {
-        border-right: 1px solid var(--border);
-        display: flex;
-        flex-direction: column;
-        gap: 0;
-      }
-
-      .section {
-        padding: 1.5rem;
-        border-bottom: 1px solid var(--border);
-      }
-
-      .section-label {
-        font-family: var(--mono);
-        font-size: 0.7rem;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        color: var(--muted);
-        margin-bottom: 1rem;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-      }
-
-      .section-label::after {
-        content: '';
-        flex: 1;
-        height: 1px;
-        background: var(--border);
-      }
-
-      /* RECORD BUTTON */
-      .record-area {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 1.2rem;
-        padding: 1.5rem 0;
-      }
-
-      .record-btn {
-        width: 80px;
-        height: 80px;
-        border-radius: 50%;
-        border: 2px solid var(--border);
-        background: var(--surface2);
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: all 0.2s ease;
-        position: relative;
-        outline: none;
-      }
-
-      .record-btn:hover {
-        border-color: var(--red);
-        background: rgba(224, 92, 92, 0.08);
-      }
-
-      .record-btn.recording {
-        border-color: var(--red);
-        background: rgba(224, 92, 92, 0.15);
-        animation: pulse-ring 1.5s ease infinite;
-      }
-
-      .record-btn .dot {
-        width: 28px;
-        height: 28px;
-        border-radius: 50%;
-        background: var(--red);
-        transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-      }
-
-      .record-btn.recording .dot {
-        border-radius: 6px;
-        width: 22px;
-        height: 22px;
-      }
-
-      @keyframes pulse-ring {
-        0% { box-shadow: 0 0 0 0 rgba(224, 92, 92, 0.4); }
-        70% { box-shadow: 0 0 0 16px rgba(224, 92, 92, 0); }
-        100% { box-shadow: 0 0 0 0 rgba(224, 92, 92, 0); }
-      }
-
-      .record-status {
-        font-family: var(--mono);
-        font-size: 0.75rem;
-        color: var(--muted);
-        letter-spacing: 0.05em;
-      }
-
-      .record-status.active {
-        color: var(--red);
-      }
-
-      .timer {
-        font-family: var(--mono);
-        font-size: 0.85rem;
-        color: var(--accent);
-        min-height: 1.2em;
-      }
-
-      /* Waveform */
-      canvas#waveform {
-        width: 100%;
-        height: 48px;
-        border-radius: 4px;
-        background: var(--surface);
-        display: block;
-      }
-
-      /* UPLOAD */
-      .upload-zone {
-        border: 1.5px dashed var(--border);
-        border-radius: 8px;
-        padding: 2rem 1rem;
-        text-align: center;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        background: var(--surface);
-        position: relative;
-      }
-
-      .upload-zone:hover, .upload-zone.drag-over {
-        border-color: var(--accent2);
-        background: rgba(232, 213, 176, 0.04);
-      }
-
-      .upload-zone input[type="file"] {
-        position: absolute;
-        inset: 0;
-        opacity: 0;
-        cursor: pointer;
-      }
-
-      .upload-icon { font-size: 1.8rem; margin-bottom: 0.5rem; }
-      .upload-hint { font-size: 0.78rem; color: var(--muted); margin-top: 0.3rem; }
-
-      /* JOBS LIST */
-      .jobs-list {
-        flex: 1;
-        overflow-y: auto;
-        padding: 1rem;
-        display: flex;
-        flex-direction: column;
-        gap: 0.6rem;
-      }
-
-      .jobs-list:empty::after {
-        content: 'No jobs yet';
-        font-family: var(--mono);
-        font-size: 0.75rem;
-        color: var(--muted);
-        text-align: center;
-        margin-top: 2rem;
-        display: block;
-      }
-
-      .job-item {
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        padding: 0.75rem 1rem;
-        cursor: pointer;
-        transition: all 0.15s ease;
-        position: relative;
-        overflow: hidden;
-      }
-
-      .job-item:hover { border-color: var(--accent2); }
-      .job-item.active { border-color: var(--accent); background: rgba(232, 213, 176, 0.05); }
-
-      .job-name {
-        font-size: 0.82rem;
-        font-weight: 500;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        margin-bottom: 0.3rem;
-      }
-
-      .job-meta {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-      }
-
-      .job-status {
-        font-family: var(--mono);
-        font-size: 0.65rem;
-        letter-spacing: 0.05em;
-        padding: 2px 8px;
-        border-radius: 100px;
-        text-transform: uppercase;
-      }
-
-      .status-queued    { background: rgba(122,120,128,0.2); color: var(--muted); }
-      .status-converting{ background: rgba(232,213,176,0.1); color: var(--accent2); }
-      .status-transcribing{ background: rgba(92,224,138,0.1); color: var(--green); }
-      .status-done      { background: rgba(92,224,138,0.15); color: var(--green); }
-      .status-error     { background: rgba(224,92,92,0.15); color: var(--red); }
-
-      .job-progress {
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        height: 2px;
-        background: var(--accent2);
-        transition: width 0.5s ease;
-      }
-
-      .job-download {
-        margin-left: auto;
-        color: var(--muted);
-        font-size: 0.75rem;
-        text-decoration: none;
-        padding: 2px 4px;
-        border-radius: 3px;
-        opacity: 0;
-        transition: opacity 0.15s, color 0.15s;
-      }
-      .job-item:hover .job-download { opacity: 1; }
-      .job-download:hover { color: var(--accent); }
-
-      .job-delete {
-        margin-left: 0;
-        background: none;
-        border: none;
-        color: var(--muted);
-        cursor: pointer;
-        font-size: 0.75rem;
-        padding: 2px 4px;
-        border-radius: 3px;
-        line-height: 1;
-        opacity: 0;
-        transition: opacity 0.15s, color 0.15s;
-      }
-      .job-item:hover .job-delete { opacity: 1; }
-      .job-delete:hover { color: var(--red); }
-
-      /* RIGHT PANEL */
-      .panel-right {
-        display: flex;
-        flex-direction: column;
-      }
-
-      .editor-toolbar {
-        padding: 1rem 1.5rem;
-        border-bottom: 1px solid var(--border);
-        display: flex;
-        align-items: center;
-        gap: 0.6rem;
-        flex-wrap: wrap;
-      }
-
-      .btn {
-        font-family: 'DM Sans', sans-serif;
-        font-size: 0.78rem;
-        font-weight: 500;
-        padding: 0.45rem 1rem;
-        border-radius: 5px;
-        border: 1px solid var(--border);
-        background: var(--surface2);
-        color: var(--text);
-        cursor: pointer;
-        transition: all 0.15s ease;
-        letter-spacing: 0.02em;
-        display: inline-flex;
-        align-items: center;
-        gap: 0.4rem;
-        white-space: nowrap;
-      }
-
-      .btn:hover { border-color: var(--accent2); color: var(--accent); }
-      .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-      .btn-primary {
-        background: var(--accent);
-        color: #0e0e0f;
-        border-color: var(--accent);
-        font-weight: 600;
-      }
-      .btn-primary:hover { background: var(--accent2); border-color: var(--accent2); color: #0e0e0f; }
-
-      .btn-ghost {
-        background: transparent;
-        border-color: transparent;
-        color: var(--muted);
-      }
-      .btn-ghost:hover { border-color: var(--border); color: var(--text); }
-
-      .spacer { flex: 1; }
-
-      .editor-area {
-        flex: 1;
-        padding: 2rem 2.5rem;
-        position: relative;
-        display: flex;
-        flex-direction: column;
-      }
-
-      .empty-state {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        color: var(--muted);
-        gap: 1rem;
-      }
-
-      .empty-glyph {
-        font-family: 'DM Serif Display', serif;
-        font-size: 4rem;
-        color: var(--border);
-        line-height: 1;
-      }
-
-      .empty-text { font-size: 0.88rem; }
-
-      #transcript-editor {
-        flex: 1;
-        width: 100%;
-        background: transparent;
-        border: none;
-        outline: none;
-        resize: none;
-        color: var(--text);
-        font-family: 'DM Sans', sans-serif;
-        font-size: 0.95rem;
-        line-height: 1.8;
-        font-weight: 300;
-        display: none;
-      }
-
-      .processing-overlay {
-        position: absolute;
-        inset: 0;
-        background: rgba(14, 14, 15, 0.88);
-        display: none;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 1.2rem;
-        backdrop-filter: blur(4px);
-      }
-
-      .processing-overlay.active { display: flex; }
-
-      .spinner {
-        width: 40px;
-        height: 40px;
-        border: 2px solid var(--border);
-        border-top-color: var(--accent);
-        border-radius: 50%;
-        animation: spin 0.8s linear infinite;
-      }
-
-      @keyframes spin { to { transform: rotate(360deg); } }
-
-      .progress-block {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 0.6rem;
-        width: 280px;
-      }
-
-      .progress-bar-track {
-        width: 100%;
-        height: 3px;
-        background: var(--border);
-        border-radius: 2px;
-        overflow: hidden;
-      }
-
-      .progress-bar-fill {
-        height: 100%;
-        background: var(--accent);
-        border-radius: 2px;
-        transition: width 0.6s ease;
-        width: 0%;
-      }
-
-      .progress-meta {
-        display: flex;
-        justify-content: space-between;
-        width: 100%;
-      }
-
-      .progress-pct {
-        font-family: var(--mono);
-        font-size: 0.75rem;
-        color: var(--accent);
-      }
-
-      .progress-elapsed {
-        font-family: var(--mono);
-        font-size: 0.75rem;
-        color: var(--muted);
-      }
-
-      .progress-last-update {
-        font-family: var(--mono);
-        font-size: 0.65rem;
-        color: var(--muted);
-        opacity: 0.6;
-      }
-
-      .processing-label {
-        font-family: var(--mono);
-        font-size: 0.78rem;
-        color: var(--accent2);
-        letter-spacing: 0.05em;
-      }
-
-      /* Toast */
-      #toast-container {
-        position: fixed;
-        bottom: 1.5rem;
-        right: 1.5rem;
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-        z-index: 9999;
-      }
-
-      .toast {
-        background: var(--surface2);
-        border: 1px solid var(--border);
-        color: var(--text);
-        padding: 0.75rem 1.2rem;
-        border-radius: 6px;
-        font-size: 0.82rem;
-        font-family: var(--mono);
-        animation: slide-up 0.3s ease;
-        max-width: 320px;
-      }
-
-      .toast.error { border-color: var(--red); color: var(--red); }
-      .toast.success { border-color: var(--green); color: var(--green); }
-
-      @keyframes slide-up {
-        from { opacity: 0; transform: translateY(12px); }
-        to { opacity: 1; transform: translateY(0); }
-      }
-
-      .char-count {
-        font-family: var(--mono);
-        font-size: 0.7rem;
-        color: var(--muted);
-        margin-left: auto;
-      }
-
-      /* AI Results */
-      .ai-results {
-        border-top: 1px solid var(--border);
-        display: flex;
-        flex-direction: column;
-        gap: 0;
-      }
-
-      .ai-result-block {
-        border-bottom: 1px solid var(--border);
-        animation: fade-in 0.3s ease;
-      }
-
-      @keyframes fade-in {
-        from { opacity: 0; transform: translateY(6px); }
-        to   { opacity: 1; transform: translateY(0); }
-      }
-
-      .ai-result-header {
-        display: flex;
-        align-items: center;
-        gap: 0.6rem;
-        padding: 0.75rem 2.5rem;
-        background: var(--surface);
-        cursor: pointer;
-        user-select: none;
-      }
-
-      .ai-result-header:hover { background: var(--surface2); }
-
-      .ai-result-badge {
-        font-family: var(--mono);
-        font-size: 0.65rem;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        padding: 2px 8px;
-        border-radius: 100px;
-      }
-
-      .badge-summarize { background: rgba(232,213,176,0.12); color: var(--accent2); }
-      .badge-grammar   { background: rgba(92,224,138,0.1);   color: var(--green); }
-
-      .ai-result-time {
-        font-family: var(--mono);
-        font-size: 0.68rem;
-        color: var(--muted);
-        margin-left: auto;
-      }
-
-      .ai-result-delete {
-        background: none;
-        border: none;
-        color: var(--muted);
-        cursor: pointer;
-        font-size: 0.75rem;
-        padding: 2px 6px;
-        border-radius: 3px;
-        opacity: 0;
-        transition: opacity 0.15s, color 0.15s;
-      }
-      .ai-result-header:hover .ai-result-delete { opacity: 1; }
-      .ai-result-delete:hover { color: var(--red); }
-
-      .ai-result-body {
-        padding: 1rem 2.5rem 1.5rem;
-        font-size: 0.92rem;
-        line-height: 1.8;
-        font-weight: 300;
-        white-space: pre-wrap;
-        color: var(--text);
-      }
-
-      .ai-result-body.collapsed { display: none; }
-
-      .ai-result-actions {
-        display: flex;
-        gap: 0.5rem;
-        padding: 0 2.5rem 1rem;
-      }
-
-      @media (max-width: 768px) {  @media (max-width: 768px) {
-        .layout { grid-template-columns: 1fr; }
-        .panel-left { border-right: none; border-bottom: 1px solid var(--border); }
-      }
-    </style>
+    <link rel="stylesheet" href="../static/css/styles.css" />
   </head>
   <body>
     <header>
@@ -626,46 +18,63 @@
     </header>
 
     <div class="layout">
-      <!-- LEFT PANEL -->
+      <!-- ── LEFT PANEL ──────────────────────────────────── -->
       <aside class="panel-left">
         <!-- RECORD -->
         <div class="section">
-          <div class="section-label">Record Audio</div>
-          <div class="record-area">
-            <button class="record-btn" id="record-btn" title="Click to record">
-              <div class="dot"></div>
-            </button>
-            <div class="timer" id="timer"></div>
-            <span class="record-status" id="record-status"
-              >Click to start recording</span
-            >
-            <canvas id="waveform"></canvas>
+          <div class="section-label" id="toggle-record">
+            <span class="toggle-icon">▾</span>
+            Record Audio
+          </div>
+          <div class="section-body" id="body-record">
+            <div class="record-area">
+              <button
+                class="record-btn"
+                id="record-btn"
+                title="Click to record"
+              >
+                <div class="dot"></div>
+              </button>
+              <div class="timer" id="timer"></div>
+              <span class="record-status" id="record-status"
+                >Click to start recording</span
+              >
+              <canvas id="waveform"></canvas>
+            </div>
           </div>
         </div>
 
         <!-- UPLOAD -->
         <div class="section">
-          <div class="section-label">Upload File</div>
-          <div class="upload-zone" id="upload-zone">
-            <input type="file" id="file-input" accept="audio/*,video/*" />
-            <div class="upload-icon">⬆</div>
-            <div style="font-size: 0.85rem">Drop audio or video file here</div>
-            <div class="upload-hint">mp3, wav, flac, m4a, mp4, mkv, mov …</div>
+          <div class="section-label" id="toggle-upload">
+            <span class="toggle-icon">▾</span>
+            Upload File
+          </div>
+          <div class="section-body" id="body-upload">
+            <div class="upload-zone" id="upload-zone">
+              <input type="file" id="file-input" accept="audio/*,video/*" />
+              <div class="upload-icon">⬆</div>
+              <div style="font-size: 0.82rem">
+                Drop audio or video file here
+              </div>
+              <div class="upload-hint">mp3, wav, flac, m4a, mp4, mkv, mov…</div>
+            </div>
           </div>
         </div>
 
         <!-- JOBS -->
-        <div
-          class="section-label"
-          style="padding: 1rem 1.5rem 0.5rem; margin: 0"
-        >
-          Jobs
+        <div class="jobs-section-header">
+          <div class="jobs-section-label" id="toggle-jobs">
+            <span class="toggle-icon">▾</span>
+            Jobs
+          </div>
         </div>
-        <div class="jobs-list" id="jobs-list"></div>
+        <!-- <div class="jobs-list" id="jobs-list"></div> -->
+        <div class="jobs-list collapsed" id="jobs-list"></div>
       </aside>
 
-      <!-- RIGHT PANEL -->
-      <main class="panel-right">
+      <!-- ── CENTER PANEL: EDITOR ──────────────────────── -->
+      <main class="panel-center">
         <div class="editor-toolbar">
           <button class="btn" id="btn-summarize" disabled>⚡ Summarize</button>
           <button class="btn" id="btn-grammar" disabled>✦ Auto fix text</button>
@@ -689,8 +98,6 @@
             placeholder="Transcript will appear here…"
           ></textarea>
 
-          <div class="ai-results" id="ai-results"></div>
-
           <div class="processing-overlay" id="processing-overlay">
             <div class="spinner"></div>
             <div class="processing-label" id="processing-label">
@@ -709,12 +116,25 @@
           </div>
         </div>
       </main>
+
+      <!-- ── RIGHT PANEL: AI RESULTS ───────────────────── -->
+      <aside class="panel-right">
+        <div class="panel-right-header">AI Results</div>
+        <div class="ai-results-panel" id="ai-results">
+          <div class="ai-empty-state" id="ai-empty-state">
+            <div class="ai-empty-glyph">✦</div>
+            <div class="ai-empty-text">
+              Summarize or auto-fix your transcript to see results here
+            </div>
+          </div>
+        </div>
+      </aside>
     </div>
 
     <div id="toast-container"></div>
 
     <script>
-      // ─── State ───────────────────────────────────────────────────────────────────
+      // ─── State ────────────────────────────────────────────────────────────────────
       let mediaRecorder = null;
       let recordChunks = [];
       let recordStream = null;
@@ -724,12 +144,12 @@
       let animFrame = null;
       let activeJobId = null;
       let pollInterval = null;
-      let jobStartTime = {}; // job_id -> Date.now() when we started watching
-      let lastUpdateTime = {}; // job_id -> Date.now() of last progress change
-      let lastProgress = {}; // job_id -> last seen progress value
-      let elapsedInterval = null; // interval for updating elapsed timer
+      let jobStartTime = {};
+      let lastUpdateTime = {};
+      let lastProgress = {};
+      let elapsedInterval = null;
 
-      // ─── DOM ─────────────────────────────────────────────────────────────────────
+      // ─── DOM ──────────────────────────────────────────────────────────────────────
       const recordBtn = document.getElementById("record-btn");
       const timerEl = document.getElementById("timer");
       const statusEl = document.getElementById("record-status");
@@ -747,6 +167,31 @@
       const btnCopy = document.getElementById("btn-copy");
       const btnExport = document.getElementById("btn-export");
       const charCount = document.getElementById("char-count");
+      const aiResultsPanel = document.getElementById("ai-results");
+      const aiEmptyState = document.getElementById("ai-empty-state");
+
+      // ─── Collapsible sections ─────────────────────────────────────────────────────
+      function initToggle(labelId, bodyId) {
+        const label = document.getElementById(labelId);
+        const body = document.getElementById(bodyId);
+        if (!label || !body) return;
+        label.addEventListener("click", () => {
+          const collapsed = body.classList.toggle("collapsed");
+          label.classList.toggle("collapsed", collapsed);
+        });
+      }
+
+      initToggle("toggle-record", "body-record");
+      initToggle("toggle-upload", "body-upload");
+
+      // Jobs toggle
+      document
+        .getElementById("toggle-jobs")
+        .addEventListener("click", function () {
+          const list = document.getElementById("jobs-list");
+          const isCollapsed = list.classList.toggle("collapsed");
+          this.classList.toggle("collapsed", isCollapsed);
+        });
 
       // ─── Toast ────────────────────────────────────────────────────────────────────
       function toast(msg, type = "info") {
@@ -768,7 +213,6 @@
         }
       }
 
-      // Pick the best supported mimeType for this browser (Safari needs mp4)
       function getSupportedMimeType() {
         const candidates = [
           "audio/webm;codecs=opus",
@@ -778,14 +222,8 @@
           "audio/ogg",
         ];
         for (const t of candidates) {
-          if (MediaRecorder.isTypeSupported(t)) {
-            console.log("[record] using mimeType:", t);
-            return t;
-          }
+          if (MediaRecorder.isTypeSupported(t)) return t;
         }
-        console.warn(
-          "[record] no preferred mimeType supported, using browser default",
-        );
         return "";
       }
 
@@ -796,10 +234,8 @@
           });
         } catch (e) {
           toast(`Microphone access denied: ${e.message}`, "error");
-          console.error("[record] getUserMedia failed:", e);
           return;
         }
-
         recordChunks = [];
         const audioCtx = new AudioContext();
         const source = audioCtx.createMediaStreamSource(recordStream);
@@ -809,30 +245,22 @@
         drawWaveform();
 
         const mimeType = getSupportedMimeType();
-        const options = mimeType ? { mimeType } : {};
         try {
-          mediaRecorder = new MediaRecorder(recordStream, options);
+          mediaRecorder = new MediaRecorder(
+            recordStream,
+            mimeType ? { mimeType } : {},
+          );
         } catch (e) {
-          console.error("[record] MediaRecorder init failed:", e);
           toast(`Recording not supported: ${e.message}`, "error");
           return;
         }
-
-        console.log("[record] started, mimeType:", mediaRecorder.mimeType);
         mediaRecorder.ondataavailable = (e) => {
-          if (e.data && e.data.size > 0) {
-            recordChunks.push(e.data);
-            console.log(
-              `[record] chunk ${recordChunks.length}: ${e.data.size} bytes`,
-            );
-          }
+          if (e.data && e.data.size > 0) recordChunks.push(e.data);
         };
         mediaRecorder.onstop = submitRecording;
-        mediaRecorder.onerror = (e) => {
-          console.error("[record] MediaRecorder error:", e);
+        mediaRecorder.onerror = (e) =>
           toast(`Recording error: ${e.error?.message || e}`, "error");
-        };
-        mediaRecorder.start(250); // chunk every 250ms
+        mediaRecorder.start(250);
 
         recordStart = Date.now();
         timerInterval = setInterval(updateTimer, 500);
@@ -862,24 +290,16 @@
             ? "ogg"
             : "webm";
         const blob = new Blob(recordChunks, { type: mimeType });
-
-        console.log(
-          `[record] submitting: ${recordChunks.length} chunks, ${blob.size} bytes, type: ${mimeType}`,
-        );
-
         if (blob.size < 1000) {
           toast("Recording too short or empty — try again", "error");
           statusEl.textContent = "Click to start recording";
           return;
         }
-
         const fd = new FormData();
         fd.append("audio", blob, `recording.${ext}`);
-
         try {
           const res = await fetch("/api/record", { method: "POST", body: fd });
           const data = await res.json();
-          console.log("[record] server response:", data);
           if (data.job_id) {
             addJob({
               id: data.job_id,
@@ -894,10 +314,8 @@
             toast(`Server error: ${data.error}`, "error");
           }
         } catch (e) {
-          console.error("[record] upload failed:", e);
           toast(`Upload failed: ${e.message}`, "error");
         }
-        statusEl.textContent = "Click to start recording";
         statusEl.textContent = "Click to start recording";
       }
 
@@ -910,8 +328,8 @@
         animFrame = requestAnimationFrame(drawWaveform);
         const data = new Uint8Array(analyser.frequencyBinCount);
         analyser.getByteTimeDomainData(data);
-        const W = waveformCanvas.offsetWidth;
-        const H = waveformCanvas.offsetHeight;
+        const W = waveformCanvas.offsetWidth,
+          H = waveformCanvas.offsetHeight;
         waveformCanvas.width = W;
         waveformCanvas.height = H;
         ctx2d.clearRect(0, 0, W, H);
@@ -926,11 +344,10 @@
         ctx2d.stroke();
       }
 
-      // ─── File Upload ─────────────────────────────────────────────────────────────
+      // ─── File Upload ──────────────────────────────────────────────────────────────
       fileInput.addEventListener("change", (e) => {
         if (e.target.files[0]) uploadFile(e.target.files[0]);
       });
-
       uploadZone.addEventListener("dragover", (e) => {
         e.preventDefault();
         uploadZone.classList.add("drag-over");
@@ -977,23 +394,21 @@
         el.dataset.id = job.id;
         const hasRecording = !!job.recording;
         el.innerHTML = `
-    <div class="job-name">${job.filename}</div>
-    <div class="job-meta">
-      <span class="job-status status-${job.status}">${job.status}</span>
-      ${hasRecording ? `<a class="job-download" href="/api/jobs/${job.id}/download" title="Download recording" download>⬇</a>` : ""}
-      <button class="job-delete" title="Delete" data-id="${job.id}">✕</button>
-    </div>
-    <div class="job-progress" style="width:${job.progress || 0}%"></div>
-  `;
+          <div class="job-name">${job.filename}</div>
+          <div class="job-meta">
+            <span class="job-status status-${job.status}">${job.status}</span>
+            ${hasRecording ? `<a class="job-download" href="/api/jobs/${job.id}/download" title="Download" download>⬇</a>` : ""}
+            <button class="job-delete" title="Delete" data-id="${job.id}">✕</button>
+          </div>
+          <div class="job-progress" style="width:${job.progress || 0}%"></div>`;
         el.querySelector(".job-delete").addEventListener("click", (e) => {
           e.stopPropagation();
           deleteJob(job.id);
         });
-        if (hasRecording) {
+        if (hasRecording)
           el.querySelector(".job-download").addEventListener("click", (e) =>
             e.stopPropagation(),
           );
-        }
         el.addEventListener("click", () => selectJob(job.id));
         jobsList.prepend(el);
         jobElements[job.id] = el;
@@ -1007,12 +422,10 @@
         el.querySelector(".job-status").textContent = job.status;
         el.querySelector(".job-progress").style.width =
           (job.progress || 0) + "%";
-        if (job.status === "done") {
+        if (job.status === "done")
           el.querySelector(".job-progress").style.background = "var(--green)";
-        }
-        if (job.status === "error") {
+        if (job.status === "error")
           el.querySelector(".job-progress").style.background = "var(--red)";
-        }
       }
 
       function selectJob(id) {
@@ -1021,12 +434,11 @@
           .forEach((e) => e.classList.remove("active"));
         if (jobElements[id]) jobElements[id].classList.add("active");
         activeJobId = id;
-        // If done, load transcript
         fetch(`/api/status/${id}`)
           .then((r) => r.json())
           .then((job) => {
             if (job.status === "done" && job.transcript) {
-              showTranscript(job.transcript);
+              showTranscript(job.transcript, job.ai_results);
             } else if (job.status === "error") {
               toast(`Error: ${job.error}`, "error");
             } else {
@@ -1046,26 +458,23 @@
           emptyState.style.display = "flex";
           setEditorButtons(false);
           charCount.textContent = "";
+          renderAiResults([]);
         }
       }
 
       function watchJob(id) {
         if (!jobStartTime[id]) jobStartTime[id] = Date.now();
         if (!lastUpdateTime[id]) lastUpdateTime[id] = Date.now();
-
         if (activeJobId === id) startElapsedTimer(id);
 
         const poll = setInterval(async () => {
           const res = await fetch(`/api/status/${id}`);
           const job = await res.json();
           updateJobEl(job);
-
-          // Track when progress actually changes
           if (job.progress !== lastProgress[id]) {
             lastProgress[id] = job.progress;
             lastUpdateTime[id] = Date.now();
           }
-
           if (job.status === "done" || job.status === "error") {
             clearInterval(poll);
             stopElapsedTimer();
@@ -1083,14 +492,12 @@
               if (activeJobId === id) hideProcessing();
             }
           } else {
-            if (activeJobId === id) {
-              updateProgressUI(job.status, job.progress);
-            }
+            if (activeJobId === id) updateProgressUI(job.status, job.progress);
           }
         }, 1500);
       }
 
-      // ─── Transcript Editor ────────────────────────────────────────────────────────
+      // ─── Editor ───────────────────────────────────────────────────────────────────
       function showTranscript(text, aiResults) {
         emptyState.style.display = "none";
         processingOverlay.classList.remove("active");
@@ -1105,7 +512,7 @@
         emptyState.style.display = "none";
         processingOverlay.classList.add("active");
         editor.style.display = "none";
-        document.getElementById("ai-results").innerHTML = "";
+        renderAiResults([]);
         setEditorButtons(false);
         updateProgressUI(label, pct || 0);
       }
@@ -1131,8 +538,6 @@
           const m = String(Math.floor(elapsed / 60)).padStart(2, "0");
           const s = String(elapsed % 60).padStart(2, "0");
           document.getElementById("progress-elapsed").textContent = `${m}:${s}`;
-
-          // Show a "last update" warning if progress hasn't changed in >10s
           const lastUpd = lastUpdateTime[jobId];
           if (lastUpd) {
             const stale = Math.floor((Date.now() - lastUpd) / 1000);
@@ -1167,13 +572,12 @@
       }
 
       editor.addEventListener("input", updateCharCount);
-
       function updateCharCount() {
         const n = editor.value.length;
         charCount.textContent = n > 0 ? `${n.toLocaleString()} chars` : "";
       }
 
-      // ─── Toolbar Actions ──────────────────────────────────────────────────────────
+      // ─── Toolbar ──────────────────────────────────────────────────────────────────
       btnCopy.addEventListener("click", () => {
         navigator.clipboard
           .writeText(editor.value)
@@ -1181,9 +585,9 @@
       });
 
       btnExport.addEventListener("click", () => {
-        const text = editor.value;
-        const md = `# Transcript\n\n${text}\n`;
-        const blob = new Blob([md], { type: "text/markdown" });
+        const blob = new Blob([`# Transcript\n\n${editor.value}\n`], {
+          type: "text/markdown",
+        });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
@@ -1202,10 +606,28 @@
       }
 
       function renderAiResults(aiResults) {
-        const container = document.getElementById("ai-results");
-        container.innerHTML = "";
-        if (!aiResults || aiResults.length === 0) return;
-        aiResults.forEach((r, idx) => {
+        // Keep the panel container but clear dynamic blocks
+        aiResultsPanel.innerHTML = "";
+
+        if (!aiResults || aiResults.length === 0) {
+          aiResultsPanel.innerHTML = `
+            <div class="ai-empty-state">
+              <div class="ai-empty-glyph">✦</div>
+              <div class="ai-empty-text">Summarize or auto-fix your transcript to see results here</div>
+            </div>`;
+          return;
+        }
+
+        // Sort: grammar fixes first, then summaries — newest on top within each group
+        const sorted = [...aiResults]
+          .map((r, idx) => ({ ...r, originalIdx: idx }))
+          .sort((a, b) => {
+            if (a.mode === b.mode) return b.created_at - a.created_at;
+            return a.mode === "grammar" ? -1 : 1;
+          });
+
+        sorted.forEach((r) => {
+          const idx = r.originalIdx;
           const label = r.mode === "summarize" ? "⚡ Summary" : "✦ Grammar Fix";
           const badgeCls =
             r.mode === "summarize" ? "badge-summarize" : "badge-grammar";
@@ -1216,17 +638,17 @@
           const block = document.createElement("div");
           block.className = "ai-result-block";
           block.innerHTML = `
-      <div class="ai-result-header">
-        <span class="ai-result-badge ${badgeCls}">${label}</span>
-        <span class="ai-result-time">${timeStr}</span>
-        <button class="ai-result-delete" title="Delete">✕</button>
-      </div>
-      <div class="ai-result-body">${escHtml(r.text)}</div>
-      <div class="ai-result-actions">
-        <button class="btn btn-ghost ai-copy-btn">⎘ Copy</button>
-        <button class="btn btn-ghost ai-export-btn">↓ Export .md</button>
-      </div>
-    `;
+            <div class="ai-result-header">
+              <span class="ai-result-badge ${badgeCls}">${label}</span>
+              <span class="ai-result-time">${timeStr}</span>
+              <button class="ai-result-delete" title="Delete">✕</button>
+            </div>
+            <div class="ai-result-body">${escHtml(r.text)}</div>
+            <div class="ai-result-actions">
+              <button class="btn btn-ghost ai-copy-btn">⎘ Copy</button>
+              <button class="btn btn-ghost ai-export-btn">↓ Export .md</button>
+            </div>`;
+
           block
             .querySelector(".ai-result-header")
             .addEventListener("click", (e) => {
@@ -1238,11 +660,13 @@
                 .querySelector(".ai-result-actions")
                 .classList.toggle("collapsed");
             });
+
           block.querySelector(".ai-copy-btn").addEventListener("click", () => {
             navigator.clipboard
               .writeText(r.text)
               .then(() => toast("Copied!", "success"));
           });
+
           block
             .querySelector(".ai-export-btn")
             .addEventListener("click", () => {
@@ -1258,6 +682,7 @@
               URL.revokeObjectURL(url);
               toast(`Exported ${lbl}`, "success");
             });
+
           block
             .querySelector(".ai-result-delete")
             .addEventListener("click", async (e) => {
@@ -1272,19 +697,18 @@
                 toast("Deleted", "success");
               }
             });
-          container.appendChild(block);
+
+          aiResultsPanel.appendChild(block);
         });
       }
 
       async function aiAction(mode) {
         const text = editor.value;
         if (!text.trim()) return;
-
         const btn = mode === "summarize" ? btnSummarize : btnGrammar;
         const origText = btn.textContent;
         btn.disabled = true;
         btn.textContent = "…";
-
         try {
           const res = await fetch("/api/ai", {
             method: "POST",
@@ -1293,9 +717,7 @@
           });
           const data = await res.json();
           if (data.error) {
-            const msg = data.hint || data.detail || data.error;
-            toast(msg, "error");
-            console.error("[ai]", data);
+            toast(data.hint || data.detail || data.error, "error");
           } else {
             if (activeJobId) {
               const jobRes = await fetch(`/api/status/${activeJobId}`);
@@ -1309,7 +731,6 @@
           }
         } catch (e) {
           toast(`AI request failed: ${e.message}`, "error");
-          console.error("[ai]", e);
         } finally {
           btn.disabled = false;
           btn.textContent = origText;
@@ -1321,19 +742,16 @@
       btnSummarize.addEventListener("click", () => aiAction("summarize"));
       btnGrammar.addEventListener("click", () => aiAction("grammar"));
 
-      // ─── Load existing jobs on boot ───────────────────────────────────────────────
+      // ─── Init ─────────────────────────────────────────────────────────────────────
       (async function init() {
         try {
           const res = await fetch("/api/jobs");
           const list = await res.json();
-          // Add in reverse so newest is on top after prepend
           [...list].reverse().forEach((job) => {
             addJob(job);
-            if (job.status !== "done" && job.status !== "error") {
+            if (job.status !== "done" && job.status !== "error")
               watchJob(job.id);
-            }
           });
-          // Auto-select latest done job
           const done = list.find((j) => j.status === "done");
           if (done) selectJob(done.id);
         } catch (e) {
