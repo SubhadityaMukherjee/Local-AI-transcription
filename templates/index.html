@@ -103,6 +103,7 @@
         <div class="editor-toolbar">
           <button class="btn" id="btn-summarize" disabled>⚡ Summarize</button>
           <button class="btn" id="btn-grammar" disabled>✦ Auto fix text</button>
+          <button class="btn" id="btn-edit-voice" disabled title="Edit text with voice commands">🎤 Edit</button>
           <button class="btn btn-ghost" id="btn-copy" disabled>⎘ Copy</button>
           <div class="spacer"></div>
           <span class="char-count" id="char-count"></span>
@@ -110,6 +111,7 @@
             ↓ Export Markdown
           </button>
         </div>
+
 
         <div class="editor-area">
           <div class="empty-state" id="empty-state">
@@ -201,6 +203,10 @@
       let appendJobId = null;
       let autoFixEnabled = localStorage.getItem("autoFixEnabled") === "true";
       let currentJobId = null;
+      let voiceEditMode = false;
+      let voiceEditChunks = [];
+      let voiceEditRecorder = null;
+      let voiceEditStream = null;
 
       // ─── DOM ──────────────────────────────────────────────────────────────────────
       const recordBtn = document.getElementById("record-btn");
@@ -218,11 +224,13 @@
       const processingLabel = document.getElementById("processing-label");
       const btnSummarize = document.getElementById("btn-summarize");
       const btnGrammar = document.getElementById("btn-grammar");
+      const btnEditVoice = document.getElementById("btn-edit-voice");
       const btnCopy = document.getElementById("btn-copy");
       const btnExport = document.getElementById("btn-export");
       const charCount = document.getElementById("char-count");
       const aiResultsPanel = document.getElementById("ai-results");
       const aiEmptyState = document.getElementById("ai-empty-state");
+
 
       // ─── Collapsible sections ─────────────────────────────────────────────────────
       function initToggle(labelId, bodyId) {
@@ -677,6 +685,7 @@
       function setEditorButtons(on) {
         btnSummarize.disabled = !on;
         btnGrammar.disabled = !on;
+        btnEditVoice.disabled = !on;
         btnCopy.disabled = !on;
         btnExport.disabled = !on;
       }
@@ -855,6 +864,119 @@
 
       btnSummarize.addEventListener("click", () => aiAction("summarize"));
       btnGrammar.addEventListener("click", () => aiAction("grammar"));
+
+      // ─── Voice Edit ─────────────────────────────────────────────────────────────
+      btnEditVoice.addEventListener("click", toggleVoiceEdit);
+
+      async function toggleVoiceEdit() {
+        if (voiceEditMode) {
+          stopVoiceEdit();
+        } else {
+          await startVoiceEdit();
+        }
+      }
+
+      async function startVoiceEdit() {
+        const text = editor.value;
+        if (!text.trim()) {
+          toast("No text in editor to edit", "error");
+          return;
+        }
+        
+        try {
+          voiceEditStream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+          });
+        } catch (e) {
+          toast(`Microphone access denied: ${e.message}`, "error");
+          return;
+        }
+        
+        voiceEditChunks = [];
+        const mimeType = getSupportedMimeType();
+        try {
+          voiceEditRecorder = new MediaRecorder(
+            voiceEditStream,
+            mimeType ? { mimeType } : {},
+          );
+        } catch (e) {
+          toast(`Recording not supported: ${e.message}`, "error");
+          return;
+        }
+        
+        voiceEditRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) voiceEditChunks.push(e.data);
+        };
+        voiceEditRecorder.onstop = submitVoiceEdit;
+        voiceEditRecorder.onerror = (e) =>
+          toast(`Recording error: ${e.error?.message || e}`, "error");
+        voiceEditRecorder.start(250);
+        
+        voiceEditMode = true;
+        btnEditVoice.classList.add("recording");
+        btnEditVoice.textContent = "⏹ Stop";
+        toast("Recording edit commands… speak now");
+      }
+
+      function stopVoiceEdit() {
+        if (voiceEditRecorder && voiceEditRecorder.state !== "inactive")
+          voiceEditRecorder.stop();
+        if (voiceEditStream) voiceEditStream.getTracks().forEach((t) => t.stop());
+        voiceEditMode = false;
+        btnEditVoice.classList.remove("recording");
+        btnEditVoice.textContent = "🎤 Edit";
+      }
+
+      async function submitVoiceEdit() {
+        const mimeType = voiceEditRecorder?.mimeType || "audio/webm";
+        const ext = mimeType.includes("mp4")
+          ? "mp4"
+          : mimeType.includes("ogg")
+            ? "ogg"
+            : "webm";
+        const blob = new Blob(voiceEditChunks, { type: mimeType });
+        
+        if (blob.size < 1000) {
+          toast("Recording too short — try again", "error");
+          return;
+        }
+        
+        const currentText = editor.value;
+        const fd = new FormData();
+        fd.append("audio", blob, `voice_edit.${ext}`);
+        fd.append("text", currentText);
+        fd.append("mode", "edit");
+        
+        toast("Processing edit command…", "info");
+        
+        try {
+          const res = await fetch("/api/ai", {
+            method: "POST",
+            body: fd,
+          });
+          const data = await res.json();
+          
+          if (data.error) {
+            toast(data.hint || data.detail || data.error, "error");
+          } else if (data.text) {
+            // Replace editor content with the edited result
+            editor.value = data.text;
+            updateCharCount();
+            toast("Text edited successfully", "success");
+            
+            // Also save as AI result
+            if (activeJobId) {
+              const jobRes = await fetch(`/api/status/${activeJobId}`);
+              const job = await jobRes.json();
+              renderAiResults(job.ai_results || []);
+            }
+          } else {
+            toast("No result returned", "error");
+          }
+        } catch (e) {
+          toast(`Edit failed: ${e.message}`, "error");
+        }
+      }
 
       // ─── Header Progress Bar ─────────────────────────────────────────────────────
       function updateHeaderProgress(label, pct) {

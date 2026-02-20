@@ -168,14 +168,55 @@ def register_routes(app: Flask, config, job_store, transcription_service, ai_ser
 
     @app.route("/api/ai", methods=["POST"])
     def ai_action():
-        data = request.get_json(force=True)
-        text = (data.get("text") or "").strip()
-        mode = data.get("mode", "summarize")
-        job_id = data.get("job_id")
-        # Optional: override personal names for this request
-        personal_names = data.get("personal_names")
+        # Check if this is a FormData request (with audio file) or JSON
+        audio_file = request.files.get("audio")
+        
+        if audio_file:
+            # Handle FormData with audio - transcribe first, then process
+            text = (request.form.get("text") or "").strip()
+            mode = request.form.get("mode", "edit")
+            job_id = request.form.get("job_id")
+            
+            # Save the audio temporarily to a path that won't be deleted
+            import tempfile
+            import os
+            import uuid
+            suffix = ".webm"
+            temp_dir = Path(tempfile.gettempdir())
+            audio_path = temp_dir / f"voice_edit_{uuid.uuid4()}{suffix}"
+            audio_file.save(str(audio_path))
+            
+            try:
+                # Transcribe the audio to get the edit command
+                job_id_temp = f"voice_edit_{uuid.uuid4()}"
+                status, transcript_result = transcription_service.process(
+                    audio_path, 
+                    job_id_temp,
+                    lambda p: None  # No progress callback needed
+                )
+                
+                # Note: transcription_service.process deletes the source file
+                
+                if status == "done":
+                    voice_command = transcript_result
+                else:
+                    return jsonify({"error": f"Failed to transcribe audio: {transcript_result}"}), 500
+                
+                # Combine the voice command with the original text for editing
+                combined_text = f"Original text:\n{text}\n\nVoice command:\n{voice_command}"
+                full_text = combined_text
+                personal_names = None
+            except Exception as e:
+                return jsonify({"error": f"Failed to process audio: {str(e)}"}), 500
+        else:
+            # Handle regular JSON request
+            data = request.get_json(force=True)
+            full_text = (data.get("text") or "").strip()
+            mode = data.get("mode", "summarize")
+            job_id = data.get("job_id")
+            personal_names = data.get("personal_names")
 
-        if not text:
+        if not full_text:
             return jsonify({"error": "No text"}), 400
         if not ai_service.is_configured():
             return jsonify({
@@ -184,12 +225,12 @@ def register_routes(app: Flask, config, job_store, transcription_service, ai_ser
             }), 503
 
         try:
-            reply = ai_service.process(text, mode, names=personal_names)
+            reply = ai_service.process(full_text, mode, names=personal_names)
 
             if job_id:
                 job_store.add_ai_result(job_id, mode, reply)
 
-            return jsonify({"result": reply})
+            return jsonify({"result": reply, "text": reply})
 
         except urlerr.HTTPError as e:
             body = e.read().decode(errors="replace")
