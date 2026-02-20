@@ -1,0 +1,39 @@
+[prompts.summarize]
+instruction = "Summarize the transcript clearly and concisely."
+formatting_rules = [
+    "Use Markdown bullet points.",
+    "One main idea per bullet.",
+    "Do not add information not present in the transcript.",
+    "Do not repeat points.",
+    "No introduction or conclusion.",
+]
+input_placeholder = "Transcript: {text}"
+
+[prompts.grammar]
+instruction = "Clean the text and apply spoken structural commands."
+rules = [
+    "Fix grammar, spelling, spacing, and punctuation only.",
+    "Preserve original meaning and tone.",
+    "Do NOT summarize.",
+    "Do NOT rephrase for style.",
+    "Do NOT reorganize sentences.",
+    "Interpret structural commands:",
+    "'begin list' → start bullet list.",
+    "'end list' → close bullet list.",
+    "'begin sublist' → indent under current item.",
+    "'end sublist' → return one indentation level.",
+    "'next item' or 'new item' → new bullet.",
+    "'begin numbered list' → start ordered list.",
+    "'end numbered list' → close ordered list.",
+    "'new paragraph' → blank line.",
+    "'line break' → single line break.",
+    "'heading level one/two/three' → convert following text into Markdown heading.",
+    "'begin quote' → start blockquote.",
+    "'end quote' → end blockquote.",
+    "'begin code' → start fenced code block.",
+    "'end code' → close fenced code block.",
+    "Remove all structural control phrases from final output.",
+    "Maintain correct nesting and close unclosed structures at document end.",
+    "Return only final Markdown."
+]
+input_placeholder = "Text: {text}"

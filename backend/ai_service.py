@@ -3,6 +3,8 @@
 import json
 import urllib.request as urlreq
 import urllib.error as urlerr
+from pathlib import Path
+import tomllib as tomli
 
 
 class AIService:
@@ -13,40 +15,36 @@ class AIService:
         self._prompts = self._load_prompts()
 
     def _load_prompts(self) -> dict:
-        """Load AI prompts."""
-        return {
-            "summarize": (
-                "Task: Summarize the transcript clearly and concisely.\n\n"
-                "Formatting rules:\n"
-                "- Use Markdown bullet points.\n"
-                "- One main idea per bullet.\n"
-                "- Do not add information not present in the transcript.\n"
-                "- Do not repeat points.\n"
-                "- No introduction or conclusion.\n\n"
-                "Transcript:\n"
-                "{text}"
-            ),
-            "grammar": (
-                "Task: Clean and lightly structure the text.\n\n"
-                "Instructions:\n"
-                "1. Fix grammar, spelling, spacing, and punctuation only.\n"
-                "2. Preserve the original meaning and tone.\n"
-                "3. Do NOT summarize.\n"
-                "4. Do NOT rephrase for style unless required for grammar clarity.\n"
-                "5. Do NOT reorganize sentences.\n"
-                "6. Only create a Markdown list if the speaker explicitly signals a list using words such as:\n"
-                "   'list', 'first', 'second', 'third', 'next item', 'another item', etc.\n"
-                "7. Do NOT infer lists from narration, sequential sentences, or related ideas.\n"
-                "8. If no explicit list signal appears, keep the text as normal paragraphs.\n"
-                "9. If the speaker explicitly says 'sublist', nest items under the most recent main list item.\n"
-                "10. Remove phrases like 'end of list' or 'end of sublist'.\n"
-                "11. Use '-' for bullet points.\n"
-                "12. Use two spaces for indentation for nested items.\n"
-                "13. Return only the final Markdown.\n\n"
-                "Text:\n"
-                "{text}"
-            ),
-        }
+        """Load AI prompts from TOML config file."""
+        prompts = {}
+        prompts_path = Path(__file__).parent.parent / "prompts.toml"
+
+        if prompts_path.exists():
+            with open(prompts_path, "rb") as f:
+                config = tomli.load(f)
+
+            for mode, prompt_config in config.get("prompts", {}).items():
+                instruction = prompt_config.get("instruction", "")
+                placeholder = prompt_config.get("input_placeholder", "{text}")
+
+                # Build prompt from instruction, rules/formatting_rules, and placeholder
+                if "formatting_rules" in prompt_config:
+                    rules_text = "\n".join(
+                        f"- {rule}" for rule in prompt_config["formatting_rules"]
+                    )
+                    prompt = f"Task: {instruction}\n\nFormatting rules:\n{rules_text}\n\n{placeholder}"
+                elif "rules" in prompt_config:
+                    rules_text = "\n".join(
+                        f"{i+1}. {rule}" for i, rule in enumerate(prompt_config["rules"])
+                    )
+                    prompt = f"Task: {instruction}\n\nInstructions:\n{rules_text}\n\n{placeholder}"
+                else:
+                    prompt = f"Task: {instruction}\n\n{placeholder}"
+
+                prompts[mode] = prompt
+
+        # Fallback to empty dict if file doesn't exist or is empty
+        return prompts
 
     def is_configured(self) -> bool:
         """Check if AI service is configured."""
