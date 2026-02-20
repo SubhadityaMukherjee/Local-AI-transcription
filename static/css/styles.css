@@ -45,8 +45,9 @@ header {
   padding: 1rem 1.5rem;
   border-bottom: 1px solid var(--border);
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 1rem;
+  flex-wrap: wrap;
 }
 
 h1 {
@@ -64,6 +65,112 @@ h1 {
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+
+/* Header progress bar */
+.header-progress {
+  flex: 1;
+  min-width: 150px;
+  max-width: 300px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 1rem;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.header-progress.active {
+  opacity: 1;
+}
+
+.header-progress-bar-track {
+  flex: 1;
+  height: 6px;
+  background: var(--surface2);
+  border-radius: 3px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.header-progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  border-radius: 3px;
+  transition: width 0.3s ease;
+  width: 0%;
+  box-shadow: 0 0 8px rgba(232, 213, 176, 0.3);
+}
+
+.header-progress.ai-progress .header-progress-bar-fill {
+  background: linear-gradient(90deg, var(--green), #7ee0a8);
+  box-shadow: 0 0 8px rgba(92, 224, 138, 0.3);
+}
+
+.header-progress-label {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  color: var(--accent2);
+  white-space: nowrap;
+  min-width: 80px;
+}
+
+/* Header toggle */
+.header-toggle {
+  margin-left: auto;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  color: var(--muted);
+}
+
+.toggle-label input {
+  display: none;
+}
+
+.toggle-switch {
+  width: 32px;
+  height: 18px;
+  background: var(--border);
+  border-radius: 9px;
+  position: relative;
+  transition: background 0.2s ease;
+}
+
+.toggle-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  background: var(--muted);
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.toggle-label input:checked + .toggle-switch {
+  background: var(--green);
+}
+
+.toggle-label input:checked + .toggle-switch::after {
+  left: 16px;
+  background: var(--text);
+}
+
+.toggle-text {
+  transition: color 0.2s ease;
+}
+
+.toggle-label:hover .toggle-text {
+  color: var(--text);
+}
+
 
 /* 3-column grid: left sidebar | main editor | right results panel */
 .layout {

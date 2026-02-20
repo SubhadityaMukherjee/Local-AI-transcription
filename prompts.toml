@@ -28,6 +28,7 @@ rules = [
     "'new paragraph' → blank line.",
     "'line break' → single line break.",
     "'heading level one/two/three' → convert following text into Markdown heading.",
+    "Do not arbitrarly add heading levels",
     "'begin quote' → start blockquote.",
     "'end quote' → end blockquote.",
     "'begin code' → start fenced code block.",

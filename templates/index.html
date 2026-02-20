@@ -15,6 +15,19 @@
     <header>
       <h1>AI Transcription</h1>
       <span class="subtitle">// uses whisper.cpp</span>
+      <div class="header-progress" id="header-progress">
+        <div class="header-progress-bar-track">
+          <div class="header-progress-bar-fill" id="header-progress-fill"></div>
+        </div>
+        <span class="header-progress-label" id="header-progress-label"></span>
+      </div>
+      <div class="header-toggle">
+        <label class="toggle-label">
+          <input type="checkbox" id="auto-fix-toggle" />
+          <span class="toggle-switch"></span>
+          <span class="toggle-text">Auto-fix on complete</span>
+        </label>
+      </div>
     </header>
 
     <div class="layout">
@@ -157,6 +170,8 @@
       let elapsedInterval = null;
       let appendMode = false;
       let appendJobId = null;
+      let autoFixEnabled = localStorage.getItem("autoFixEnabled") === "true";
+      let currentJobId = null;
 
       // ─── DOM ──────────────────────────────────────────────────────────────────────
       const recordBtn = document.getElementById("record-btn");
@@ -513,6 +528,7 @@
       }
 
       function watchJob(id) {
+        currentJobId = id;
         if (!jobStartTime[id]) jobStartTime[id] = Date.now();
         if (!lastUpdateTime[id]) lastUpdateTime[id] = Date.now();
         if (activeJobId === id) startElapsedTimer(id);
@@ -521,6 +537,12 @@
           const res = await fetch(`/api/status/${id}`);
           const job = await res.json();
           updateJobEl(job);
+          
+          // Update header progress bar for active job
+          if (activeJobId === id) {
+            updateHeaderProgress(job.status, job.progress);
+          }
+          
           if (job.progress !== lastProgress[id]) {
             lastProgress[id] = job.progress;
             lastUpdateTime[id] = Date.now();
@@ -531,11 +553,19 @@
             delete jobStartTime[id];
             delete lastUpdateTime[id];
             delete lastProgress[id];
+            
+            // Hide header progress when done
+            hideHeaderProgress();
+            
             if (job.status === "done") {
               toast("Transcription complete!", "success");
               if (activeJobId === id || !activeJobId) {
                 showTranscript(job.transcript, job.ai_results);
                 selectJob(id);
+              }
+              // Auto-trigger grammar fix if enabled
+              if (autoFixEnabled && job.transcript) {
+                triggerAutoFix(id, job.transcript);
               }
             } else {
               toast(`Job failed: ${job.error}`, "error");
@@ -546,6 +576,7 @@
           }
         }, 1500);
       }
+
 
       // ─── Editor ───────────────────────────────────────────────────────────────────
       function showTranscript(text, aiResults) {
@@ -795,6 +826,99 @@
 
       btnSummarize.addEventListener("click", () => aiAction("summarize"));
       btnGrammar.addEventListener("click", () => aiAction("grammar"));
+
+      // ─── Header Progress Bar ─────────────────────────────────────────────────────
+      function updateHeaderProgress(label, pct) {
+        const headerProgress = document.getElementById("header-progress");
+        const fill = document.getElementById("header-progress-fill");
+        const labelEl = document.getElementById("header-progress-label");
+        
+        // Show the progress bar when there's activity
+        if (pct > 0 && pct < 100) {
+          headerProgress.classList.add("active");
+        }
+        
+        if (fill) fill.style.width = pct + "%";
+        if (labelEl) {
+          const stageMap = {
+            queued: "Queued",
+            converting: "Converting",
+            transcribing: "Transcribing",
+          };
+          labelEl.textContent = pct > 0 && pct < 100 ? `${stageMap[label] || label} ${pct}%` : "";
+        }
+      }
+
+      function hideHeaderProgress() {
+        const headerProgress = document.getElementById("header-progress");
+        const fill = document.getElementById("header-progress-fill");
+        const labelEl = document.getElementById("header-progress-label");
+        if (fill) fill.style.width = "0%";
+        if (labelEl) labelEl.textContent = "";
+        // Keep it visible briefly then hide
+        setTimeout(() => {
+          headerProgress.classList.remove("active");
+          headerProgress.classList.remove("ai-progress");
+        }, 1000);
+      }
+
+      function showAiProgress(label, pct) {
+        const headerProgress = document.getElementById("header-progress");
+        const fill = document.getElementById("header-progress-fill");
+        const labelEl = document.getElementById("header-progress-label");
+        
+        headerProgress.classList.add("active", "ai-progress");
+        
+        if (fill) fill.style.width = pct + "%";
+        if (labelEl) {
+          labelEl.textContent = pct > 0 && pct < 100 ? `${label} ${pct}%` : "";
+        }
+      }
+
+      // ─── Auto-fix Toggle ───────────────────────────────────────────────────────
+      const autoFixToggle = document.getElementById("auto-fix-toggle");
+      autoFixToggle.checked = autoFixEnabled;
+      autoFixToggle.addEventListener("change", (e) => {
+        autoFixEnabled = e.target.checked;
+        localStorage.setItem("autoFixEnabled", autoFixEnabled);
+      });
+
+      // Auto-trigger grammar fix if enabled
+      async function triggerAutoFix(jobId, transcript) {
+        if (!autoFixEnabled || !transcript) return;
+        
+        toast("Auto-fixing transcript…", "info");
+        
+        // Show AI progress in header
+        showAiProgress("Auto-fixing", 50);
+        
+        try {
+          const res = await fetch("/api/ai", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: transcript, mode: "grammar", job_id: jobId }),
+          });
+          const data = await res.json();
+          if (data.error) {
+            toast(data.hint || data.detail || data.error, "error");
+            hideHeaderProgress();
+          } else {
+            // Show completion in header
+            showAiProgress("Complete", 100);
+            toast("Auto-fix complete!", "success");
+            // Refresh the job to show the new AI result
+            const jobRes = await fetch(`/api/status/${jobId}`);
+            const job = await jobRes.json();
+            if (job.ai_results) {
+              renderAiResults(job.ai_results);
+            }
+            setTimeout(hideHeaderProgress, 1500);
+          }
+        } catch (e) {
+          toast(`Auto-fix failed: ${e.message}`, "error");
+          hideHeaderProgress();
+        }
+      }
 
       // ─── Init ─────────────────────────────────────────────────────────────────────
       (async function init() {
