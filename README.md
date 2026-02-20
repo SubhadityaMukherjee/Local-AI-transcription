@@ -3,8 +3,7 @@
 I wanted to build a customizable frontend for Whisper.cpp. I know there are a lot of them, but this works for my own quirks
 
 - Note that a bunch of this was vibe coded using Claude/other local models. Please do not try to use this in production. This is at the moment meant to be a local utility only!!
-<img width="1798" height="778" alt="SCR-20260220-mooq" src="https://github.com/user-attachments/assets/ca0c294c-e166-493e-bd1e-210177720f18" />
-
+<img width="1779" height="1052" alt="SCR-20260220-pdzq" src="https://github.com/user-attachments/assets/1a8b98ac-45d0-44b5-aee1-354901fb0907" />
 
 ## Setup
 
