@@ -180,6 +180,56 @@ h1 {
   height: 18px;
 }
 
+/* Append button */
+.append-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--surface2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  outline: none;
+  margin-left: 0.5rem;
+}
+
+.append-btn:hover {
+  border-color: var(--green);
+  background: rgba(92, 224, 138, 0.08);
+}
+
+.append-btn.recording {
+  border-color: var(--green);
+  background: rgba(92, 224, 138, 0.15);
+  animation: pulse-ring-green 1.5s ease infinite;
+}
+
+.append-btn .append-icon {
+  font-size: 1.2rem;
+  color: var(--green);
+  font-weight: bold;
+  line-height: 1;
+}
+
+.append-btn.recording .append-icon {
+  color: var(--green);
+}
+
+@keyframes pulse-ring-green {
+  0% {
+    box-shadow: 0 0 0 0 rgba(92, 224, 138, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(92, 224, 138, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(92, 224, 138, 0);
+  }
+}
+
 @keyframes pulse-ring {
   0% {
     box-shadow: 0 0 0 0 rgba(224, 92, 92, 0.4);

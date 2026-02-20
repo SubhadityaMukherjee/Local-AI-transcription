@@ -29,6 +29,9 @@ class JobStore:
             for jid, j in data.items():
                 if cutoff and j.get("created_at", 0) < cutoff:
                     continue
+                # Ensure job has required fields even if loaded from disk
+                if "status" not in j:
+                    j["status"] = "done"  # Default to done for loaded jobs
                 self.jobs[jid] = j
                 kept += 1
 

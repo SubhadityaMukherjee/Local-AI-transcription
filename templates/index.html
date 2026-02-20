@@ -35,6 +35,13 @@
               >
                 <div class="dot"></div>
               </button>
+              <button
+                class="record-btn append-btn"
+                id="append-btn"
+                title="Append to last recording"
+              >
+                <span class="append-icon">+</span>
+              </button>
               <div class="timer" id="timer"></div>
               <span class="record-status" id="record-status"
                 >Click to start recording</span
@@ -148,9 +155,12 @@
       let lastUpdateTime = {};
       let lastProgress = {};
       let elapsedInterval = null;
+      let appendMode = false;
+      let appendJobId = null;
 
       // ─── DOM ──────────────────────────────────────────────────────────────────────
       const recordBtn = document.getElementById("record-btn");
+      const appendBtn = document.getElementById("append-btn");
       const timerEl = document.getElementById("timer");
       const statusEl = document.getElementById("record-status");
       const waveformCanvas = document.getElementById("waveform");
@@ -204,6 +214,20 @@
 
       // ─── Recording ────────────────────────────────────────────────────────────────
       recordBtn.addEventListener("click", toggleRecord);
+      appendBtn.addEventListener("click", toggleAppendRecord);
+
+      // Append mode: toggle append recording
+      async function toggleAppendRecord() {
+        if (!activeJobId) {
+          toast("Select a recording first to append to", "error");
+          return;
+        }
+        if (mediaRecorder && mediaRecorder.state === "recording") {
+          stopRecording();
+        } else {
+          await startRecording(true);
+        }
+      }
 
       async function toggleRecord() {
         if (mediaRecorder && mediaRecorder.state === "recording") {
@@ -227,7 +251,10 @@
         return "";
       }
 
-      async function startRecording() {
+      async function startRecording(isAppend = false) {
+        appendMode = isAppend;
+        appendJobId = isAppend ? activeJobId : null;
+        
         try {
           recordStream = await navigator.mediaDevices.getUserMedia({
             audio: true,
@@ -265,7 +292,12 @@
         recordStart = Date.now();
         timerInterval = setInterval(updateTimer, 500);
         recordBtn.classList.add("recording");
-        statusEl.textContent = "Recording… click to stop";
+        if (isAppend) {
+          appendBtn.classList.add("recording");
+          statusEl.textContent = "Appending… click to stop";
+        } else {
+          statusEl.textContent = "Recording… click to stop";
+        }
         statusEl.classList.add("active");
       }
 
@@ -276,6 +308,7 @@
         clearInterval(timerInterval);
         cancelAnimationFrame(animFrame);
         recordBtn.classList.remove("recording");
+        appendBtn.classList.remove("recording");
         statusEl.textContent = "Uploading…";
         statusEl.classList.remove("active");
         timerEl.textContent = "";
@@ -297,25 +330,42 @@
         }
         const fd = new FormData();
         fd.append("audio", blob, `recording.${ext}`);
+        
+        // If in append mode, send the job_id to append to
+        if (appendMode && appendJobId) {
+          fd.append("append_to", appendJobId);
+        }
+        
         try {
           const res = await fetch("/api/record", { method: "POST", body: fd });
           const data = await res.json();
           if (data.job_id) {
-            addJob({
-              id: data.job_id,
-              filename: `recording.${ext}`,
-              status: "queued",
-              progress: 0,
-            });
-            watchJob(data.job_id);
-            selectJob(data.job_id);
-            toast("Recording submitted");
+            // If append mode, we don't create a new job element, we just re-transcribe
+            if (appendMode && appendJobId) {
+              // Update the existing job - re-run transcription
+              toast("Appended audio, re-transcribing…", "success");
+              watchJob(appendJobId);
+              selectJob(appendJobId);
+            } else {
+              addJob({
+                id: data.job_id,
+                filename: `recording.${ext}`,
+                status: "queued",
+                progress: 0,
+              });
+              watchJob(data.job_id);
+              selectJob(data.job_id);
+              toast("Recording submitted");
+            }
           } else {
             toast(`Server error: ${data.error}`, "error");
           }
         } catch (e) {
           toast(`Upload failed: ${e.message}`, "error");
         }
+        // Reset append mode
+        appendMode = false;
+        appendJobId = null;
         statusEl.textContent = "Click to start recording";
       }
 
