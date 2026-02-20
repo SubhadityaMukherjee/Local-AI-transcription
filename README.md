@@ -4,6 +4,7 @@ I wanted to build a customizable frontend for Whisper.cpp. I know there are a lo
 
 - Note that a bunch of this was vibe coded using Claude/other local models. Please do not try to use this in production. This is at the moment meant to be a local utility only!!
 <img width="1779" height="1052" alt="SCR-20260220-pdzq" src="https://github.com/user-attachments/assets/1a8b98ac-45d0-44b5-aee1-354901fb0907" />
+<img width="956" height="292" alt="SCR-20260220-pjwc" src="https://github.com/user-attachments/assets/d6a9fd9e-3ca0-4f1a-90f3-e59b491b6cb0" />
 
 ## Setup
 
