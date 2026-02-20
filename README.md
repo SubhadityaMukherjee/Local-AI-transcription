@@ -2,7 +2,7 @@
 
 I wanted to build a customizable frontend for Whisper.cpp. I know there are a lot of them, but this works for my own quirks
 
-- Note that a bunch of this was vibe coded using Claude. Please do not try to use this in production. This was mainly meant as a utlity script first.
+- Note that a bunch of this was vibe coded using Claude/other local models. Please do not try to use this in production. This is at the moment meant to be a local utility only!!
 
 ## Setup
 
@@ -36,10 +36,10 @@ In the header, there's a toggle switch labeled **"Auto-fix on complete"**. When 
 ### AI Actions
 
 Once a transcript is ready, use the toolbar buttons:
-- **⚡ Summarize**: Generate a bullet-point summary of the transcript
-- **✦ Auto fix text**: Clean up grammar, spelling, punctuation, and apply structural commands
-- **⎘ Copy**: Copy transcript to clipboard
-- **↓ Export Markdown**: Download as `.md` file
+- **Summarize**: Generate a bullet-point summary of the transcript
+- **Auto fix text**: Clean up grammar, spelling, punctuation, and apply structural commands
+- **Copy**: Copy transcript to clipboard
+- **Export Markdown**: Download as `.md` file
 
 ### AI Results Panel
 
