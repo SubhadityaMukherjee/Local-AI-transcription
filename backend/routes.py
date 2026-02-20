@@ -49,61 +49,86 @@ def register_routes(app: Flask, config, job_store, transcription_service, ai_ser
             if not existing_job:
                 return jsonify({"error": "Job not found for append"}), 404
             
-            # Use existing job's recording path to append to
+            print(f"[record] append_to job: {append_to}, recording field: {existing_job.get('recording')}")
+            
+            # Check if job has a recording to append to
+            recording_path = None
             if existing_job.get("recording"):
                 existing_recording = config.BASE_DIR / existing_job["recording"]
+                print(f"[record] checking recording path: {existing_recording}")
+                print(f"[record] exists: {existing_recording.exists()}")
                 if existing_recording.exists():
-                    # Save new recording
-                    ts = time.strftime("%Y%m%d_%H%M%S")
-                    new_filename = f'append_{ts}.{ext}'
-                    new_saved = config.RECORDINGS_DIR / new_filename
-                    blob.save(new_saved)
-                    size = new_saved.stat().st_size
-                    
-                    if size < 1000:
-                        new_saved.unlink(missing_ok=True)
-                        return jsonify({"error": f"Recording too small ({size} bytes)"}), 400
-                    
-                    # Combine audio files
-                    combined_filename = f'combined_{ts}.{ext}'
-                    combined_path = config.RECORDINGS_DIR / combined_filename
-                    
-                    # Use ffmpeg to concatenate audio files if available, 
-                    # otherwise just copy the new file (simple fallback)
-                    import subprocess
-                    try:
-                        # Try to concatenate with ffmpeg
-                        result = subprocess.run([
-                            "ffmpeg", "-y", 
-                            "-i", str(existing_recording),
-                            "-i", str(new_saved),
-                            "-filter_complex", "[0:a][1:a]concat=n=2:v=0:a=1[a]",
-                            "-map", "[a]",
-                            str(combined_path)
-                        ], capture_output=True, text=True)
-                        
-                        if result.returncode != 0 or not combined_path.exists():
-                            # Fallback: just use the new recording
-                            shutil.copy2(new_saved, combined_path)
-                            print(f"[record] ffmpeg concat failed, using new recording only")
-                        else:
-                            # Clean up temp files
-                            new_saved.unlink(missing_ok=True)
-                            print(f"[record] appended audio to existing recording")
-                    except Exception as e:
-                        # Fallback: just use the new recording
-                        shutil.copy2(new_saved, combined_path)
-                        new_saved.unlink(missing_ok=True)
-                        print(f"[record] concat error: {e}, using new recording only")
-                    
-                    # Update job with combined recording
-                    job_store.update(append_to, recording=str(combined_path.relative_to(config.BASE_DIR)))
-                    
-                    # Re-run transcription
-                    _start_job(append_to, combined_path)
-                    return jsonify({"job_id": append_to})
+                    recording_path = existing_recording
             
-            return jsonify({"error": "No recording found for append"}), 404
+            if not recording_path:
+                return jsonify({
+                    "error": "No recording found for append",
+                    "hint": "This job was created from an uploaded file without a saved recording. Upload a new recording instead."
+                }), 404
+            
+            # Save new recording
+            ts = time.strftime("%Y%m%d_%H%M%S")
+            new_filename = f'append_{ts}.{ext}'
+            new_saved = config.RECORDINGS_DIR / new_filename
+            blob.save(new_saved)
+            size = new_saved.stat().st_size
+            
+            if size < 1000:
+                new_saved.unlink(missing_ok=True)
+                return jsonify({"error": f"Recording too small ({size} bytes)"}), 400
+            
+            # Combine audio files
+            combined_filename = f'combined_{ts}.{ext}'
+            combined_path = config.RECORDINGS_DIR / combined_filename
+            
+            # Use ffmpeg to concatenate audio files if available, 
+            # otherwise just copy the new file (simple fallback)
+            import subprocess
+            try:
+                # Try to concatenate with ffmpeg
+                result = subprocess.run([
+                    "ffmpeg", "-y", 
+                    "-i", str(recording_path),
+                    "-i", str(new_saved),
+                    "-filter_complex", "[0:a][1:a]concat=n=2:v=0:a=1[a]",
+                    "-map", "[a]",
+                    str(combined_path)
+                ], capture_output=True, text=True)
+                
+                if result.returncode != 0 or not combined_path.exists():
+                    # Fallback: just use the new recording
+                    print(f"[record] ffmpeg concat failed (returncode={result.returncode}), using new recording only")
+                    if result.returncode != 0:
+                        print(f"[record] ffmpeg stderr: {result.stderr[:500]}")
+                    shutil.copy2(new_saved, combined_path)
+                else:
+                    # Clean up temp files
+                    new_saved.unlink(missing_ok=True)
+                    print(f"[record] appended audio to existing recording")
+            except Exception as e:
+                # Fallback: just use the new recording
+                shutil.copy2(new_saved, combined_path)
+                new_saved.unlink(missing_ok=True)
+                print(f"[record] concat error: {e}, using new recording only")
+            
+            # Update job with combined recording and clear transcript for re-transcription
+            new_recording = str(combined_path.relative_to(config.BASE_DIR))
+            print(f"[record] updating job with recording: {new_recording}")
+            job_store.update(
+                append_to, 
+                recording=new_recording,
+                transcript=None,  # Clear old transcript so UI shows processing state
+                status="queued",
+                progress=0
+            )
+            
+            # Copy to uploads folder before processing (transcription service deletes the source)
+            dest = config.UPLOAD_DIR / f"{append_to}.{ext}"
+            shutil.copy2(combined_path, dest)
+            
+            # Re-run transcription
+            _start_job(append_to, dest)
+            return jsonify({"job_id": append_to})
         
         # Normal recording mode (non-append)
         ts = time.strftime("%Y%m%d_%H%M%S")
