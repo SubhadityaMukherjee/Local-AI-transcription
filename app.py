@@ -4,6 +4,18 @@ Transcription via whisper.cpp (submodule at vendor/whisper.cpp),
 built with CoreML + Metal for macOS acceleration.
 """
 
+import platform
+import multiprocessing
+
+# Set multiprocessing start method to 'spawn' on macOS to avoid
+# "leaked semaphore" warnings from the resource tracker.
+# This must be done before any other multiprocessing imports.
+if platform.system() == "Darwin":
+    try:
+        multiprocessing.set_start_method("spawn", force=True)
+    except RuntimeError:
+        pass  # Already set
+
 from backend.config import Config
 from backend.job_store import JobStore
 from backend.transcription_service import TranscriptionService
