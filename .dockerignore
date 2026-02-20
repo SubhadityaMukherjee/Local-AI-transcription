@@ -1,0 +1,55 @@
+# =============================================================================
+# Docker Ignore - Exclude unnecessary files from build context
+# =============================================================================
+
+# Git
+.git
+# .gitmodules - Kept for submodule management
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+vendor/  # Will be populated at runtime by docker-entrypoint.sh
+recordings/
+outputs/
+uploads/
+store/
+.env
+*.log
+
+# Tests
+tests/
+.pytest_cache/
+coverage/
+
+# Documentation
+README.md
+!README.md  # Keep if needed
+
+# CI/CD
+.github/
+.gitlab-ci.yml

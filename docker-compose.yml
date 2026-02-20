@@ -1,0 +1,46 @@
+services:
+  # Main Flask app
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: whisper-studio
+    ports:
+      - "5343:5343"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./outputs:/app/outputs
+      - ./store:/app/store
+      - ./recordings:/app/recordings
+    environment:
+      # WHISPER_BIN and WHISPER_MODEL are set by docker-entrypoint.sh
+      - WHISPER_MODEL_NAME=medium.en
+      - AI_BASE_URL=http://ollama:11434/v1
+      - AI_API_KEY=ollama
+      - AI_MODEL=qwen2.5:7b-instruct
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  # Official Ollama service (cross-platform)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: whisper-studio-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    restart: unless-stopped
+    # Optional GPU: uncomment only on Linux with NVIDIA
+    # runtime: nvidia
+    # environment:
+    #   - NVIDIA_VISIBLE_DEVICES=all
+
+volumes:
+  ollama-data:
+  uploads:
+  outputs:
+  store:
+  recordings:
