@@ -79,7 +79,8 @@ h1 {
   transition: opacity 0.3s ease;
 }
 
-.header-progress.active {
+.header-progress.active,
+.header-progress.ai-progress {
   opacity: 1;
 }
 

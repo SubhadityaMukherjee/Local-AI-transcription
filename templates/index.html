@@ -889,8 +889,14 @@
         
         toast("Auto-fixing transcript…", "info");
         
-        // Show AI progress in header
-        showAiProgress("Auto-fixing", 50);
+        // Show AI progress in header - force it to show immediately
+        const headerProgress = document.getElementById("header-progress");
+        const fill = document.getElementById("header-progress-fill");
+        const labelEl = document.getElementById("header-progress-label");
+        
+        headerProgress.classList.add("active", "ai-progress");
+        if (fill) fill.style.width = "50%";
+        if (labelEl) labelEl.textContent = "Auto-fixing 50%";
         
         try {
           const res = await fetch("/api/ai", {
@@ -904,7 +910,8 @@
             hideHeaderProgress();
           } else {
             // Show completion in header
-            showAiProgress("Complete", 100);
+            if (fill) fill.style.width = "100%";
+            if (labelEl) labelEl.textContent = "Complete";
             toast("Auto-fix complete!", "success");
             // Refresh the job to show the new AI result
             const jobRes = await fetch(`/api/status/${jobId}`);
@@ -912,7 +919,7 @@
             if (job.ai_results) {
               renderAiResults(job.ai_results);
             }
-            setTimeout(hideHeaderProgress, 1500);
+            setTimeout(hideHeaderProgress, 2000);
           }
         } catch (e) {
           toast(`Auto-fix failed: ${e.message}`, "error");
