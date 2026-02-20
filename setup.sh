@@ -17,7 +17,7 @@ err() {
 section() { echo -e "\n${BOLD}── $* ──${RESET}"; }
 
 # Model used for summarize / grammar fix — fast and high quality on M-series
-OLLAMA_MODEL="gemma3:4b"
+OLLAMA_MODEL="qwen2.5:7b-instruct"
 
 # ── 0. Prereq checks ──────────────────────────────────────────────────────────
 section "Checking prerequisites"
@@ -77,7 +77,7 @@ cd ../..
 
 # ── 4. Download Whisper model ─────────────────────────────────────────────────
 section "Whisper model"
-MODEL_NAME="${WHISPER_MODEL_NAME:-base.en}"
+MODEL_NAME="${WHISPER_MODEL_NAME:-medium.en}"
 MODEL_FILE="vendor/whisper.cpp/models/ggml-${MODEL_NAME}.bin"
 
 if [ -f "$MODEL_FILE" ]; then

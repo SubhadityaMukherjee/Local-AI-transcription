@@ -27,19 +27,22 @@ class AIService:
                 "{text}"
             ),
             "grammar": (
-                "Task: Correct the text.\n\n"
-                "Strict rules:\n"
-                "1. Fix grammar, spelling, spacing, punctuation, and numbering.\n"
-                "2. Do NOT remove content.\n"
-                "3. Do NOT add new information.\n"
-                "4. Preserve meaning exactly.\n"
-                "5. Preserve existing structure unless it is clearly broken.\n"
-                "6. If I say make it into a list, format whats below as a proper Markdown list.\n"
-                "7. If the word 'next' appears at the beginning of a sentence and indicates the next list item, remove the word and merge it into the list structure.\n"
-                "8. If 'next' is part of a normal sentence, keep it.\n"
-                "9. Return ONLY the corrected text. No explanations.\n\n"
-                "10. Use - for markdown lists\n\n"
-                "11. Reflow the text properly\n"
+                "Task: Clean and lightly structure the text.\n\n"
+                "Instructions:\n"
+                "1. Fix grammar, spelling, spacing, and punctuation only.\n"
+                "2. Preserve the original meaning and tone.\n"
+                "3. Do NOT summarize.\n"
+                "4. Do NOT rephrase for style unless required for grammar clarity.\n"
+                "5. Do NOT reorganize sentences.\n"
+                "6. Only create a Markdown list if the speaker explicitly signals a list using words such as:\n"
+                "   'list', 'first', 'second', 'third', 'next item', 'another item', etc.\n"
+                "7. Do NOT infer lists from narration, sequential sentences, or related ideas.\n"
+                "8. If no explicit list signal appears, keep the text as normal paragraphs.\n"
+                "9. If the speaker explicitly says 'sublist', nest items under the most recent main list item.\n"
+                "10. Remove phrases like 'end of list' or 'end of sublist'.\n"
+                "11. Use '-' for bullet points.\n"
+                "12. Use two spaces for indentation for nested items.\n"
+                "13. Return only the final Markdown.\n\n"
                 "Text:\n"
                 "{text}"
             ),
@@ -73,11 +76,13 @@ class AIService:
             raise ValueError("AI endpoint not configured")
 
         prompt = self.format_prompt(mode, text)
-        payload = json.dumps({
-            "model": self.config.AI_MODEL,
-            "messages": [{"role": "user", "content": prompt}],
-            "stream": False,
-        }).encode()
+        payload = json.dumps(
+            {
+                "model": self.config.AI_MODEL,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": False,
+            }
+        ).encode()
 
         url = f"{self.config.AI_BASE_URL.rstrip('/')}/chat/completions"
         req = urlreq.Request(
