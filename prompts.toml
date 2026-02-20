@@ -17,6 +17,7 @@ rules = [
   "Do NOT summarize.",
   "Do NOT rephrase for style.",
   "Do NOT reorganize sentences.",
+  "IMPORTANT: Correctly spell the following personal names: {names}",
   "Interpret structural commands:",
   "'begin list' → start bullet list.",
   "'end list' → close bullet list.",

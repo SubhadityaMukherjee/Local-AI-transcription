@@ -28,6 +28,11 @@
           <span class="toggle-text">Auto-fix on complete</span>
         </label>
       </div>
+      <div class="header-personal-names">
+        <button class="btn btn-ghost" id="btn-personal-names" title="Manage personal names for spelling">
+          ✎ Personal Names
+        </button>
+      </div>
     </header>
 
     <div class="layout">
@@ -152,6 +157,30 @@
     </div>
 
     <div id="toast-container"></div>
+
+    <!-- Personal Names Modal -->
+    <div class="modal" id="personal-names-modal">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Personal Names for Spelling</h2>
+          <button class="modal-close" id="close-names-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-hint">Enter names (one per line) that the AI should recognize and spell correctly during transcription fixes.</p>
+          <textarea 
+            id="personal-names-input" 
+            class="personal-names-textarea"
+            placeholder="John Smith&#10;Jane Doe&#10;Michael Johnson"
+            rows="8"
+          ></textarea>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" id="cancel-names-modal">Cancel</button>
+          <button class="btn btn-primary" id="save-names-modal">Save Names</button>
+        </div>
+      </div>
+    </div>
 
     <script>
       // ─── State ────────────────────────────────────────────────────────────────────
@@ -954,6 +983,62 @@
       function refreshAiProgress(job) {
         job.ai_results?.forEach((r, idx) => updateAiProgress(idx, r.progress));
       }
+
+      // ─── Personal Names Modal ───────────────────────────────────────────────────
+      const personalNamesBtn = document.getElementById("btn-personal-names");
+      const personalNamesModal = document.getElementById("personal-names-modal");
+      const personalNamesInput = document.getElementById("personal-names-input");
+      const closeNamesModal = document.getElementById("close-names-modal");
+      const cancelNamesModal = document.getElementById("cancel-names-modal");
+      const saveNamesModal = document.getElementById("save-names-modal");
+
+      function openPersonalNamesModal() {
+        personalNamesModal.classList.add("active");
+        // Fetch current names
+        fetch("/api/personal-names")
+          .then(r => r.json())
+          .then(data => {
+            personalNamesInput.value = (data.names || []).join("\n");
+          })
+          .catch(() => {
+            personalNamesInput.value = "";
+          });
+      }
+
+      function closePersonalNamesModal() {
+        personalNamesModal.classList.remove("active");
+      }
+
+      async function savePersonalNames() {
+        const text = personalNamesInput.value;
+        // Split by newlines and filter empty lines
+        const names = text.split("\n").map(n => n.trim()).filter(n => n);
+        
+        try {
+          const res = await fetch("/api/personal-names", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ names })
+          });
+          const data = await res.json();
+          if (data.error) {
+            toast(data.error, "error");
+          } else {
+            toast("Personal names saved", "success");
+            closePersonalNamesModal();
+          }
+        } catch (e) {
+          toast(`Failed to save: ${e.message}`, "error");
+        }
+      }
+
+      personalNamesBtn.addEventListener("click", openPersonalNamesModal);
+      closeNamesModal.addEventListener("click", closePersonalNamesModal);
+      cancelNamesModal.addEventListener("click", closePersonalNamesModal);
+      saveNamesModal.addEventListener("click", savePersonalNames);
+
+      // Close modal on backdrop click
+      personalNamesModal.querySelector(".modal-backdrop").addEventListener("click", closePersonalNamesModal);
     </script>
   </body>
 </html>

@@ -172,6 +172,8 @@ def register_routes(app: Flask, config, job_store, transcription_service, ai_ser
         text = (data.get("text") or "").strip()
         mode = data.get("mode", "summarize")
         job_id = data.get("job_id")
+        # Optional: override personal names for this request
+        personal_names = data.get("personal_names")
 
         if not text:
             return jsonify({"error": "No text"}), 400
@@ -182,7 +184,7 @@ def register_routes(app: Flask, config, job_store, transcription_service, ai_ser
             }), 503
 
         try:
-            reply = ai_service.process(text, mode)
+            reply = ai_service.process(text, mode, names=personal_names)
 
             if job_id:
                 job_store.add_ai_result(job_id, mode, reply)
@@ -206,6 +208,28 @@ def register_routes(app: Flask, config, job_store, transcription_service, ai_ser
             import traceback
             print(f"[ai] Unexpected error: {traceback.format_exc()}")
             return jsonify({"error": f"AI request failed: {e}"}), 503
+
+    @app.route("/api/personal-names", methods=["GET"])
+    def get_personal_names():
+        """Get the list of personal names."""
+        names = config.get_personal_names()
+        return jsonify({"names": names})
+
+    @app.route("/api/personal-names", methods=["POST"])
+    def save_personal_names():
+        """Save the list of personal names."""
+        data = request.get_json(force=True)
+        names = data.get("names", [])
+        
+        if not isinstance(names, list):
+            return jsonify({"error": "names must be a list"}), 400
+        
+        # Filter to keep only non-empty strings
+        names = [n.strip() for n in names if isinstance(n, str) and n.strip()]
+        
+        if config.save_personal_names(names):
+            return jsonify({"names": names})
+        return jsonify({"error": "Failed to save names"}), 500
 
     @app.route("/api/jobs/<job_id>/download")
     def download_recording(job_id):

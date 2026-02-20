@@ -40,6 +40,10 @@ class Config:
         self.AI_API_KEY = os.environ.get("AI_API_KEY", "ollama")
         self.AI_MODEL = os.environ.get("AI_MODEL", "mistral")
 
+        # Personal names for spelling correction (loaded from file)
+        self.PERSONAL_NAMES_FILE = self.BASE_DIR / "personal_names.txt"
+        self._personal_names = None
+
         # Allowed file extensions
         self.ALLOWED_EXTENSIONS = {
             "mp3", "wav", "ogg", "flac", "m4a", "aac", "opus", "webm",
@@ -91,3 +95,36 @@ class Config:
         print(f"  Model  : {self.WHISPER_MODEL or '⚠ not found — run ./setup.sh'}")
         print(f"  AI     : {self.AI_BASE_URL or 'disabled (set AI_BASE_URL in .env)'}")
         print()
+
+    def get_personal_names(self) -> list:
+        """Load personal names from file for spelling correction."""
+        if self._personal_names is not None:
+            return self._personal_names
+        
+        names = []
+        if self.PERSONAL_NAMES_FILE.exists():
+            try:
+                with open(self.PERSONAL_NAMES_FILE, "r") as f:
+                    for line in f:
+                        name = line.strip()
+                        if name and not name.startswith("#"):
+                            names.append(name)
+            except Exception as e:
+                print(f"Warning: Could not load personal names: {e}")
+        
+        self._personal_names = names
+        return names
+
+    def save_personal_names(self, names: list) -> bool:
+        """Save personal names to file."""
+        try:
+            with open(self.PERSONAL_NAMES_FILE, "w") as f:
+                f.write("# Personal names for spelling correction\n")
+                f.write("# One name per line\n")
+                for name in names:
+                    f.write(f"{name}\n")
+            self._personal_names = names
+            return True
+        except Exception as e:
+            print(f"Error saving personal names: {e}")
+            return False

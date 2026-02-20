@@ -41,6 +41,7 @@ Once a transcript is ready, use the toolbar buttons:
 - **Auto fix text**: Clean up grammar, spelling, punctuation, and apply structural commands
 - **Copy**: Copy transcript to clipboard
 - **Export Markdown**: Download as `.md` file
+- **Custom names/words**: There is also an option to add personal names .If you find that the AI mispronounces or misunderstands some names or words, you can add them in and they will be saved. And the next time something like this comes up, the LLM will try to correct it according to this list.
 
 ### AI Results Panel
 

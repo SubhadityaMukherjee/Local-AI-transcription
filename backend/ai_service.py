@@ -54,18 +54,26 @@ class AIService:
         """Get prompt template for mode."""
         return self._prompts.get(mode, self._prompts["summarize"])
 
-    def format_prompt(self, mode: str, text: str) -> str:
-        """Format prompt with text."""
+    def format_prompt(self, mode: str, text: str, names: list = None) -> str:
+        """Format prompt with text and optional personal names."""
         template = self.get_prompt(mode)
-        return template.format(text=text)
+        
+        # Format names list if provided
+        names_str = ""
+        if names:
+            names_str = ", ".join(names)
+        
+        # Format with both text and names (names defaults to empty string if not provided)
+        return template.format(text=text, names=names_str)
 
-    def process(self, text: str, mode: str = "summarize") -> str:
+    def process(self, text: str, mode: str = "summarize", names: list = None) -> str:
         """
         Process text with AI.
 
         Args:
             text: Input text
             mode: Processing mode ('summarize' or 'grammar')
+            names: Optional list of personal names for spelling correction
 
         Returns:
             AI response text
@@ -73,7 +81,11 @@ class AIService:
         if not self.is_configured():
             raise ValueError("AI endpoint not configured")
 
-        prompt = self.format_prompt(mode, text)
+        # Use provided names or get from config
+        if names is None:
+            names = self.config.get_personal_names()
+        
+        prompt = self.format_prompt(mode, text, names)
         payload = json.dumps(
             {
                 "model": self.config.AI_MODEL,
