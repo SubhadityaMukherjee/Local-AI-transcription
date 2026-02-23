@@ -19,7 +19,12 @@ class Config:
         self.JOBS_FILE = self.STORE_DIR / "jobs.json"
 
         # Create directories
-        for dir_path in [self.UPLOAD_DIR, self.OUTPUT_DIR, self.STORE_DIR, self.RECORDINGS_DIR]:
+        for dir_path in [
+            self.UPLOAD_DIR,
+            self.OUTPUT_DIR,
+            self.STORE_DIR,
+            self.RECORDINGS_DIR,
+        ]:
             dir_path.mkdir(exist_ok=True)
 
         # Max upload size: 500 MB
@@ -46,8 +51,22 @@ class Config:
 
         # Allowed file extensions
         self.ALLOWED_EXTENSIONS = {
-            "mp3", "wav", "ogg", "flac", "m4a", "aac", "opus", "webm",
-            "caf", "mp4", "mkv", "mov", "avi", "ts", "wmv", "m4v",
+            "mp3",
+            "wav",
+            "ogg",
+            "flac",
+            "m4a",
+            "aac",
+            "opus",
+            "webm",
+            "caf",
+            "mp4",
+            "mkv",
+            "mov",
+            "avi",
+            "ts",
+            "wmv",
+            "m4v",
         }
 
     def _find_whisper_bin(self) -> str:
@@ -69,9 +88,12 @@ class Config:
             return os.environ["WHISPER_MODEL"]
 
         model_names = [
-            "ggml-base.en.bin", "ggml-base.bin",
-            "ggml-small.en.bin", "ggml-small.bin",
-            "ggml-medium.en.bin", "ggml-large-v3.bin",
+            "ggml-base.en.bin",
+            "ggml-base.bin",
+            "ggml-small.en.bin",
+            "ggml-small.bin",
+            "ggml-medium.en.bin",
+            "ggml-large-v3.bin",
         ]
 
         for name in model_names:
@@ -100,7 +122,7 @@ class Config:
         """Load personal names from file for spelling correction."""
         if self._personal_names is not None:
             return self._personal_names
-        
+
         names = []
         if self.PERSONAL_NAMES_FILE.exists():
             try:
@@ -111,20 +133,23 @@ class Config:
                             names.append(name)
             except Exception as e:
                 print(f"Warning: Could not load personal names: {e}")
-        
+
         self._personal_names = names
         return names
 
     def save_personal_names(self, names: list) -> bool:
-        """Save personal names to file."""
+        """Save personal names to file and invalidate cache."""
         try:
             with open(self.PERSONAL_NAMES_FILE, "w") as f:
                 f.write("# Personal names for spelling correction\n")
                 f.write("# One name per line\n")
                 for name in names:
                     f.write(f"{name}\n")
-            self._personal_names = names
+            self._personal_names = names  # Update cache with new value
             return True
         except Exception as e:
             print(f"Error saving personal names: {e}")
+            self._personal_names = (
+                None  # Invalidate cache on error so next read retries from disk
+            )
             return False

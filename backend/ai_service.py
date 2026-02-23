@@ -1,10 +1,10 @@
 """AI service for summarization and text processing."""
 
 import json
-import urllib.request as urlreq
-import urllib.error as urlerr
-from pathlib import Path
 import tomllib as tomli
+import urllib.error as urlerr
+import urllib.request as urlreq
+from pathlib import Path
 
 
 class AIService:
@@ -35,7 +35,8 @@ class AIService:
                     prompt = f"Task: {instruction}\n\nFormatting rules:\n{rules_text}\n\n{placeholder}"
                 elif "rules" in prompt_config:
                     rules_text = "\n".join(
-                        f"{i+1}. {rule}" for i, rule in enumerate(prompt_config["rules"])
+                        f"{i+1}. {rule}"
+                        for i, rule in enumerate(prompt_config["rules"])
                     )
                     prompt = f"Task: {instruction}\n\nInstructions:\n{rules_text}\n\n{placeholder}"
                 else:
@@ -51,20 +52,19 @@ class AIService:
         return bool(self.config.AI_BASE_URL)
 
     def get_prompt(self, mode: str) -> str:
-        """Get prompt template for mode."""
-        return self._prompts.get(mode, self._prompts["summarize"])
+        """Get prompt template for mode, falling back to first available or a bare default."""
+        if mode in self._prompts:
+            return self._prompts[mode]
+        if self._prompts:
+            return next(iter(self._prompts.values()))
+        return "Process the following text:\n\n{text}"
 
     def format_prompt(self, mode: str, text: str, names: list = None) -> str:
         """Format prompt with text and optional personal names."""
         template = self.get_prompt(mode)
-        
-        # Format names list if provided
-        names_str = ""
-        if names:
-            names_str = ", ".join(names)
-        
-        # Format with both text and names (names defaults to empty string if not provided)
-        return template.format(text=text, names=names_str)
+        names_str = ", ".join(names) if names else ""
+        # Use safe format_map so missing placeholders (e.g. {names} not in template) don't crash
+        return template.format_map({"text": text, "names": names_str})
 
     def process(self, text: str, mode: str = "summarize", names: list = None) -> str:
         """
@@ -84,7 +84,7 @@ class AIService:
         # Use provided names or get from config
         if names is None:
             names = self.config.get_personal_names()
-        
+
         prompt = self.format_prompt(mode, text, names)
         payload = json.dumps(
             {

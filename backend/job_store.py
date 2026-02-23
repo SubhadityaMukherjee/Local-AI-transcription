@@ -23,7 +23,11 @@ class JobStore:
 
         try:
             data = json.loads(jobs_file.read_text())
-            cutoff = time.time() - self.config.JOB_TTL_DAYS * 86400 if self.config.JOB_TTL_DAYS > 0 else 0
+            cutoff = (
+                time.time() - self.config.JOB_TTL_DAYS * 86400
+                if self.config.JOB_TTL_DAYS > 0
+                else 0
+            )
             kept = 0
 
             for jid, j in data.items():
@@ -47,7 +51,7 @@ class JobStore:
                 for jid, j in self.jobs.items()
                 if j["status"] in ("done", "error")
             }
-
+        # File I/O happens outside the lock so other threads aren't blocked
         try:
             tmp = self.config.JOBS_FILE.with_suffix(".tmp")
             tmp.write_text(json.dumps(saveable, indent=2))
@@ -102,14 +106,17 @@ class JobStore:
             sorted_jobs = sorted(
                 self.jobs.values(),
                 key=lambda j: j["created_at"],
-                reverse=True
+                reverse=True,
             )
-            return sorted_jobs[:limit]
+            # Return shallow copies so callers can't accidentally mutate in-memory state
+            return [dict(j) for j in sorted_jobs[:limit]]
 
     def clear_completed(self) -> int:
         """Delete all completed/errored jobs."""
         with self._lock:
-            to_remove = [jid for jid, j in self.jobs.items() if j["status"] in ("done", "error")]
+            to_remove = [
+                jid for jid, j in self.jobs.items() if j["status"] in ("done", "error")
+            ]
             for jid in to_remove:
                 del self.jobs[jid]
         self.save_to_disk()
@@ -122,11 +129,13 @@ class JobStore:
             if j:
                 if "ai_results" not in j:
                     j["ai_results"] = []
-                j["ai_results"].append({
-                    "mode": mode,
-                    "text": text,
-                    "created_at": time.time(),
-                })
+                j["ai_results"].append(
+                    {
+                        "mode": mode,
+                        "text": text,
+                        "created_at": time.time(),
+                    }
+                )
         self.save_to_disk()
 
     def delete_ai_result(self, job_id: str, idx: int) -> bool:

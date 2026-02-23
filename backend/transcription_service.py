@@ -16,8 +16,19 @@ class TranscriptionService:
         """Convert audio file to WAV format."""
         result = subprocess.run(
             [
-                "ffmpeg", "-y", "-i", str(src),
-                "-ar", "16000", "-ac", "1", "-sample_fmt", "s16", "-f", "wav", str(dst)
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(src),
+                "-ar",
+                "16000",
+                "-ac",
+                "1",
+                "-sample_fmt",
+                "s16",
+                "-f",
+                "wav",
+                str(dst),
             ],
             capture_output=True,
             text=True,
@@ -25,7 +36,9 @@ class TranscriptionService:
         if result.returncode != 0:
             raise RuntimeError(f"ffmpeg failed:\n{result.stderr[-800:]}")
 
-    def transcribe(self, wav: Path, job_id: str, progress_callback: Callable[[int], None] = None):
+    def transcribe(
+        self, wav: Path, job_id: str, progress_callback: Callable[[int], None] = None
+    ):
         """
         Transcribe audio file using Whisper.
 
@@ -47,12 +60,16 @@ class TranscriptionService:
 
         cmd = [
             self.config.WHISPER_BIN,
-            "--model", self.config.WHISPER_MODEL,
-            "--file", str(wav),
+            "--model",
+            self.config.WHISPER_MODEL,
+            "--file",
+            str(wav),
             "--output-txt",
-            "--output-file", out_stem,
+            "--output-file",
+            out_stem,
             "--print-progress",
-            "--threads", threads,
+            "--threads",
+            threads,
         ]
 
         stderr_lines = []
@@ -87,7 +104,9 @@ class TranscriptionService:
 
         raise RuntimeError("whisper-cli produced no output file")
 
-    def process(self, src: Path, job_id: str, on_progress: Callable[[int], None] = None):
+    def process(
+        self, src: Path, job_id: str, on_progress: Callable[[int], None] = None
+    ):
         """
         Process a complete transcription job.
 
@@ -102,11 +121,15 @@ class TranscriptionService:
         wav = self.config.UPLOAD_DIR / f"{job_id}.wav"
 
         try:
-            print(f"[job:{job_id[:8]}] converting {src.name} ({src.stat().st_size} bytes)")
+            print(
+                f"[job:{job_id[:8]}] converting {src.name} ({src.stat().st_size} bytes)"
+            )
             if on_progress:
                 on_progress(5)
             self.convert_to_wav(src, wav)
-            print(f"[job:{job_id[:8]}] converted → {wav.name} ({wav.stat().st_size} bytes)")
+            print(
+                f"[job:{job_id[:8]}] converted → {wav.name} ({wav.stat().st_size} bytes)"
+            )
 
             if on_progress:
                 on_progress(30)
@@ -126,6 +149,7 @@ class TranscriptionService:
 
         except Exception as e:
             import traceback
+
             print(f"[job:{job_id[:8]}] ERROR: {e}")
             traceback.print_exc()
             return "error", str(e)

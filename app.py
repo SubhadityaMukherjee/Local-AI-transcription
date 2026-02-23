@@ -29,7 +29,7 @@ transcription_service = TranscriptionService(config)
 ai_service = AIService(config)
 
 # Create Flask app
-app = __import__('flask').Flask(__name__)
+app = __import__("flask").Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = config.MAX_CONTENT_LENGTH
 
 # Register routes

@@ -1,12 +1,16 @@
 """API routes for Whisper Studio."""
 
+import os
 import shutil
+import subprocess
+import tempfile
 import threading
 import time
+import uuid
 from pathlib import Path
 from urllib import error as urlerr
 
-from flask import Flask, request, jsonify, render_template, send_file
+from flask import Flask, jsonify, render_template, request, send_file
 
 
 def register_routes(app: Flask, config, job_store, transcription_service, ai_service):
@@ -22,7 +26,12 @@ def register_routes(app: Flask, config, job_store, transcription_service, ai_ser
         if not f or not f.filename:
             return jsonify({"error": "No file"}), 400
         if not config.allowed_file(f.filename):
-            return jsonify({"error": f"Unsupported type: .{config.file_extension(f.filename)}"}), 400
+            return (
+                jsonify(
+                    {"error": f"Unsupported type: .{config.file_extension(f.filename)}"}
+                ),
+                400,
+            )
 
         job = job_store.create(f.filename)
         dest = config.UPLOAD_DIR / f"{job['id']}_{f.filename}"
@@ -37,100 +46,14 @@ def register_routes(app: Flask, config, job_store, transcription_service, ai_ser
             print("[record] ERROR: no audio field in request")
             return jsonify({"error": "No audio"}), 400
 
-        # Check for append mode
         append_to = request.form.get("append_to")
-        
         mime = blob.mimetype or blob.content_type or ""
         ext = "mp4" if "mp4" in mime else "ogg" if "ogg" in mime else "webm"
 
-        # If append mode, get the existing job
         if append_to:
-            existing_job = job_store.get(append_to)
-            if not existing_job:
-                return jsonify({"error": "Job not found for append"}), 404
-            
-            print(f"[record] append_to job: {append_to}, recording field: {existing_job.get('recording')}")
-            
-            # Check if job has a recording to append to
-            recording_path = None
-            if existing_job.get("recording"):
-                existing_recording = config.BASE_DIR / existing_job["recording"]
-                print(f"[record] checking recording path: {existing_recording}")
-                print(f"[record] exists: {existing_recording.exists()}")
-                if existing_recording.exists():
-                    recording_path = existing_recording
-            
-            if not recording_path:
-                return jsonify({
-                    "error": "No recording found for append",
-                    "hint": "This job was created from an uploaded file without a saved recording. Upload a new recording instead."
-                }), 404
-            
-            # Save new recording
-            ts = time.strftime("%Y%m%d_%H%M%S")
-            new_filename = f'append_{ts}.{ext}'
-            new_saved = config.RECORDINGS_DIR / new_filename
-            blob.save(new_saved)
-            size = new_saved.stat().st_size
-            
-            if size < 1000:
-                new_saved.unlink(missing_ok=True)
-                return jsonify({"error": f"Recording too small ({size} bytes)"}), 400
-            
-            # Combine audio files
-            combined_filename = f'combined_{ts}.{ext}'
-            combined_path = config.RECORDINGS_DIR / combined_filename
-            
-            # Use ffmpeg to concatenate audio files if available, 
-            # otherwise just copy the new file (simple fallback)
-            import subprocess
-            try:
-                # Try to concatenate with ffmpeg
-                result = subprocess.run([
-                    "ffmpeg", "-y", 
-                    "-i", str(recording_path),
-                    "-i", str(new_saved),
-                    "-filter_complex", "[0:a][1:a]concat=n=2:v=0:a=1[a]",
-                    "-map", "[a]",
-                    str(combined_path)
-                ], capture_output=True, text=True)
-                
-                if result.returncode != 0 or not combined_path.exists():
-                    # Fallback: just use the new recording
-                    print(f"[record] ffmpeg concat failed (returncode={result.returncode}), using new recording only")
-                    if result.returncode != 0:
-                        print(f"[record] ffmpeg stderr: {result.stderr[:500]}")
-                    shutil.copy2(new_saved, combined_path)
-                else:
-                    # Clean up temp files
-                    new_saved.unlink(missing_ok=True)
-                    print(f"[record] appended audio to existing recording")
-            except Exception as e:
-                # Fallback: just use the new recording
-                shutil.copy2(new_saved, combined_path)
-                new_saved.unlink(missing_ok=True)
-                print(f"[record] concat error: {e}, using new recording only")
-            
-            # Update job with combined recording and clear transcript for re-transcription
-            new_recording = str(combined_path.relative_to(config.BASE_DIR))
-            print(f"[record] updating job with recording: {new_recording}")
-            job_store.update(
-                append_to, 
-                recording=new_recording,
-                transcript=None,  # Clear old transcript so UI shows processing state
-                status="queued",
-                progress=0
-            )
-            
-            # Copy to uploads folder before processing (transcription service deletes the source)
-            dest = config.UPLOAD_DIR / f"{append_to}.{ext}"
-            shutil.copy2(combined_path, dest)
-            
-            # Re-run transcription
-            _start_job(append_to, dest)
-            return jsonify({"job_id": append_to})
-        
-        # Normal recording mode (non-append)
+            return _handle_append(blob, append_to, ext)
+
+        # Normal recording mode
         ts = time.strftime("%Y%m%d_%H%M%S")
         job = job_store.create(f"recording_{ts}.{ext}")
         filename = f'{ts}_{job["id"][:8]}.{ext}'
@@ -142,7 +65,6 @@ def register_routes(app: Flask, config, job_store, transcription_service, ai_ser
 
         dest = config.UPLOAD_DIR / f"{job['id']}.{ext}"
         shutil.copy2(saved, dest)
-
         job_store.update(job["id"], recording=str(saved.relative_to(config.BASE_DIR)))
 
         if size < 1000:
@@ -150,12 +72,93 @@ def register_routes(app: Flask, config, job_store, transcription_service, ai_ser
             job_store.update(
                 job["id"],
                 status="error",
-                error=f"Recording too small ({size} bytes) — was the mic captured?"
+                error=f"Recording too small ({size} bytes) — was the mic captured?",
             )
             return jsonify({"job_id": job["id"]})
 
         _start_job(job["id"], dest)
         return jsonify({"job_id": job["id"]})
+
+    def _handle_append(blob, append_to: str, ext: str):
+        """Append new audio to an existing recording job and re-transcribe."""
+        existing_job = job_store.get(append_to)
+        if not existing_job:
+            return jsonify({"error": "Job not found for append"}), 404
+
+        recording_path = None
+        if existing_job.get("recording"):
+            p = config.BASE_DIR / existing_job["recording"]
+            if p.exists():
+                recording_path = p
+
+        if not recording_path:
+            return (
+                jsonify(
+                    {
+                        "error": "No recording found for append",
+                        "hint": "This job was created from an uploaded file without a saved recording.",
+                    }
+                ),
+                404,
+            )
+
+        ts = time.strftime("%Y%m%d_%H%M%S")
+        new_saved = config.RECORDINGS_DIR / f"append_{ts}.{ext}"
+        blob.save(new_saved)
+
+        if new_saved.stat().st_size < 1000:
+            new_saved.unlink(missing_ok=True)
+            return jsonify({"error": "Appended recording too small"}), 400
+
+        combined_path = config.RECORDINGS_DIR / f"combined_{ts}.{ext}"
+        try:
+            result = subprocess.run(
+                [
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    str(recording_path),
+                    "-i",
+                    str(new_saved),
+                    "-filter_complex",
+                    "[0:a][1:a]concat=n=2:v=0:a=1[a]",
+                    "-map",
+                    "[a]",
+                    str(combined_path),
+                ],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0 or not combined_path.exists():
+                print(
+                    f"[record] ffmpeg concat failed, using new recording only: {result.stderr[:500]}"
+                )
+                shutil.copy2(new_saved, combined_path)
+            else:
+                print("[record] appended audio to existing recording")
+        except Exception as e:
+            print(f"[record] concat error: {e}, using new recording only")
+            shutil.copy2(new_saved, combined_path)
+        finally:
+            new_saved.unlink(missing_ok=True)
+            # Clean up the old combined recording now that we have a new one
+            if recording_path != config.BASE_DIR / existing_job.get("recording", ""):
+                recording_path.unlink(missing_ok=True)
+
+        new_recording = str(combined_path.relative_to(config.BASE_DIR))
+        job_store.update(
+            append_to,
+            recording=new_recording,
+            transcript=None,
+            status="queued",
+            progress=0,
+            error=None,
+        )
+
+        dest = config.UPLOAD_DIR / f"{append_to}.{ext}"
+        shutil.copy2(combined_path, dest)
+        _start_job(append_to, dest)
+        return jsonify({"job_id": append_to})
 
     @app.route("/api/status/<job_id>")
     def status(job_id):
@@ -168,48 +171,43 @@ def register_routes(app: Flask, config, job_store, transcription_service, ai_ser
 
     @app.route("/api/ai", methods=["POST"])
     def ai_action():
-        # Check if this is a FormData request (with audio file) or JSON
         audio_file = request.files.get("audio")
-        
+
         if audio_file:
-            # Handle FormData with audio - transcribe first, then process
             text = (request.form.get("text") or "").strip()
             mode = request.form.get("mode", "edit")
             job_id = request.form.get("job_id")
-            
-            # Save the audio temporarily to a path that won't be deleted
-            import tempfile
-            import os
-            import uuid
-            suffix = ".webm"
-            temp_dir = Path(tempfile.gettempdir())
-            audio_path = temp_dir / f"voice_edit_{uuid.uuid4()}{suffix}"
+
+            # Preserve the actual file extension so ffmpeg/whisper can decode it
+            mime = audio_file.mimetype or audio_file.content_type or ""
+            suffix = ".mp4" if "mp4" in mime else ".ogg" if "ogg" in mime else ".webm"
+            audio_path = (
+                Path(tempfile.gettempdir()) / f"voice_edit_{uuid.uuid4()}{suffix}"
+            )
             audio_file.save(str(audio_path))
-            
+
             try:
-                # Transcribe the audio to get the edit command
                 job_id_temp = f"voice_edit_{uuid.uuid4()}"
-                status, transcript_result = transcription_service.process(
-                    audio_path, 
-                    job_id_temp,
-                    lambda p: None  # No progress callback needed
+                vstatus, transcript_result = transcription_service.process(
+                    audio_path, job_id_temp, lambda p: None
                 )
-                
-                # Note: transcription_service.process deletes the source file
-                
-                if status == "done":
-                    voice_command = transcript_result
-                else:
-                    return jsonify({"error": f"Failed to transcribe audio: {transcript_result}"}), 500
-                
-                # Combine the voice command with the original text for editing
-                combined_text = f"Original text:\n{text}\n\nVoice command:\n{voice_command}"
-                full_text = combined_text
+                if vstatus != "done":
+                    return (
+                        jsonify(
+                            {
+                                "error": f"Failed to transcribe audio: {transcript_result}"
+                            }
+                        ),
+                        500,
+                    )
+
+                full_text = (
+                    f"Original text:\n{text}\n\nVoice command:\n{transcript_result}"
+                )
                 personal_names = None
             except Exception as e:
-                return jsonify({"error": f"Failed to process audio: {str(e)}"}), 500
+                return jsonify({"error": f"Failed to process audio: {e}"}), 500
         else:
-            # Handle regular JSON request
             data = request.get_json(force=True)
             full_text = (data.get("text") or "").strip()
             mode = data.get("mode", "summarize")
@@ -219,55 +217,60 @@ def register_routes(app: Flask, config, job_store, transcription_service, ai_ser
         if not full_text:
             return jsonify({"error": "No text"}), 400
         if not ai_service.is_configured():
-            return jsonify({
-                "error": "AI endpoint not configured",
-                "hint": ai_service.get_config_hint(),
-            }), 503
+            return (
+                jsonify(
+                    {
+                        "error": "AI endpoint not configured",
+                        "hint": ai_service.get_config_hint(),
+                    }
+                ),
+                503,
+            )
 
         try:
             reply = ai_service.process(full_text, mode, names=personal_names)
-
             if job_id:
                 job_store.add_ai_result(job_id, mode, reply)
-
             return jsonify({"result": reply, "text": reply})
 
         except urlerr.HTTPError as e:
             body = e.read().decode(errors="replace")
             print(f"[ai] HTTP {e.code}: {body}")
-            return jsonify({"error": f"Ollama returned HTTP {e.code}", "detail": body}), 503
+            return (
+                jsonify({"error": f"Ollama returned HTTP {e.code}", "detail": body}),
+                503,
+            )
 
         except urlerr.URLError as e:
             print(f"[ai] Cannot reach Ollama: {e.reason}")
-            return jsonify({
-                "error": f"Cannot reach Ollama — is it running?",
-                "detail": str(e.reason),
-                "hint": "Run: ollama serve",
-            }), 503
+            return (
+                jsonify(
+                    {
+                        "error": "Cannot reach Ollama — is it running?",
+                        "detail": str(e.reason),
+                        "hint": "Run: ollama serve",
+                    }
+                ),
+                503,
+            )
 
         except Exception as e:
             import traceback
+
             print(f"[ai] Unexpected error: {traceback.format_exc()}")
             return jsonify({"error": f"AI request failed: {e}"}), 503
 
     @app.route("/api/personal-names", methods=["GET"])
     def get_personal_names():
-        """Get the list of personal names."""
-        names = config.get_personal_names()
-        return jsonify({"names": names})
+        return jsonify({"names": config.get_personal_names()})
 
     @app.route("/api/personal-names", methods=["POST"])
     def save_personal_names():
-        """Save the list of personal names."""
         data = request.get_json(force=True)
         names = data.get("names", [])
-        
         if not isinstance(names, list):
             return jsonify({"error": "names must be a list"}), 400
-        
-        # Filter to keep only non-empty strings
         names = [n.strip() for n in names if isinstance(n, str) and n.strip()]
-        
         if config.save_personal_names(names):
             return jsonify({"names": names})
         return jsonify({"error": "Failed to save names"}), 500
@@ -284,26 +287,33 @@ def register_routes(app: Flask, config, job_store, transcription_service, ai_ser
 
     @app.route("/api/info")
     def info():
-        return jsonify({
-            "whisper_bin": config.WHISPER_BIN,
-            "whisper_model": config.WHISPER_MODEL,
-            "is_macos": config.IS_MACOS,
-            "ai_enabled": ai_service.is_configured(),
-            "ai_model": config.AI_MODEL if ai_service.is_configured() else None,
-        })
+        return jsonify(
+            {
+                "whisper_bin": config.WHISPER_BIN,
+                "whisper_model": config.WHISPER_MODEL,
+                "is_macos": config.IS_MACOS,
+                "ai_enabled": ai_service.is_configured(),
+                "ai_model": config.AI_MODEL if ai_service.is_configured() else None,
+            }
+        )
 
     @app.route("/api/debug/<job_id>")
     def debug(job_id):
         j = job_store.get(job_id)
         if not j:
             return jsonify({"error": "Not found"}), 404
-        return jsonify({
-            "id": j["id"],
-            "status": j["status"],
-            "error": j.get("error"),
-            "debug_log": j.get("debug_log", "(no log yet)"),
-            "cmd": f"{config.WHISPER_BIN} --model {config.WHISPER_MODEL} --file <wav> --output-txt --threads {max(4, __import__('os').cpu_count() or 4)}",
-        })
+        return jsonify(
+            {
+                "id": j["id"],
+                "status": j["status"],
+                "error": j.get("error"),
+                "debug_log": j.get("debug_log", "(no log yet)"),
+                "cmd": (
+                    f"{config.WHISPER_BIN} --model {config.WHISPER_MODEL}"
+                    f" --file <wav> --output-txt --threads {max(4, os.cpu_count() or 4)}"
+                ),
+            }
+        )
 
     @app.route("/api/jobs/<job_id>/ai/<int:idx>", methods=["DELETE"])
     def delete_ai_result(job_id, idx):
@@ -323,14 +333,13 @@ def register_routes(app: Flask, config, job_store, transcription_service, ai_ser
         return jsonify({"cleared": cleared})
 
     def _start_job(job_id: str, src: Path):
-        """Start processing job in background."""
+        """Start processing job in background thread."""
+
         def run():
-            def on_progress(pct):
-                job_store.update(job_id, progress=pct)
-
-            status, result = transcription_service.process(src, job_id, on_progress)
-
-            if status == "done":
+            vstatus, result = transcription_service.process(
+                src, job_id, lambda pct: job_store.update(job_id, progress=pct)
+            )
+            if vstatus == "done":
                 job_store.update(job_id, status="done", progress=100, transcript=result)
             else:
                 job_store.update(job_id, status="error", error=result)
