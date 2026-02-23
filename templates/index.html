@@ -38,7 +38,6 @@
     <div class="layout">
       <!-- ── LEFT PANEL ──────────────────────────────────── -->
       <aside class="panel-left">
-        <!-- RECORD -->
         <div class="section">
           <div class="section-label" id="toggle-record">
             <span class="toggle-icon">▾</span>
@@ -46,30 +45,19 @@
           </div>
           <div class="section-body" id="body-record">
             <div class="record-area">
-              <button
-                class="record-btn"
-                id="record-btn"
-                title="Click to record"
-              >
+              <button class="record-btn" id="record-btn" title="Click to record">
                 <div class="dot"></div>
               </button>
-              <button
-                class="record-btn append-btn"
-                id="append-btn"
-                title="Append to last recording"
-              >
+              <button class="record-btn append-btn" id="append-btn" title="Append to last recording">
                 <span class="append-icon">+</span>
               </button>
               <div class="timer" id="timer"></div>
-              <span class="record-status" id="record-status"
-                >Click to start recording</span
-              >
+              <span class="record-status" id="record-status">Click to start recording</span>
               <canvas id="waveform"></canvas>
             </div>
           </div>
         </div>
 
-        <!-- UPLOAD -->
         <div class="section">
           <div class="section-label" id="toggle-upload">
             <span class="toggle-icon">▾</span>
@@ -79,26 +67,22 @@
             <div class="upload-zone" id="upload-zone">
               <input type="file" id="file-input" accept="audio/*,video/*" />
               <div class="upload-icon">⬆</div>
-              <div style="font-size: 0.82rem">
-                Drop audio or video file here
-              </div>
+              <div style="font-size: 0.82rem">Drop audio or video file here</div>
               <div class="upload-hint">mp3, wav, flac, m4a, mp4, mkv, mov…</div>
             </div>
           </div>
         </div>
 
-        <!-- JOBS -->
         <div class="jobs-section-header">
           <div class="jobs-section-label" id="toggle-jobs">
             <span class="toggle-icon">▾</span>
             Jobs
           </div>
         </div>
-        <!-- <div class="jobs-list" id="jobs-list"></div> -->
         <div class="jobs-list collapsed" id="jobs-list"></div>
       </aside>
 
-      <!-- ── CENTER PANEL: EDITOR ──────────────────────── -->
+      <!-- ── CENTER PANEL ──────────────────────────────────── -->
       <main class="panel-center">
         <div class="editor-toolbar">
           <button class="btn" id="btn-summarize" disabled>⚡ Summarize</button>
@@ -107,11 +91,8 @@
           <button class="btn btn-ghost" id="btn-copy" disabled>⎘ Copy</button>
           <div class="spacer"></div>
           <span class="char-count" id="char-count"></span>
-          <button class="btn btn-primary" id="btn-export" disabled>
-            ↓ Export Markdown
-          </button>
+          <button class="btn btn-primary" id="btn-export" disabled>↓ Export Markdown</button>
         </div>
-
 
         <div class="editor-area">
           <div class="empty-state" id="empty-state">
@@ -119,17 +100,11 @@
             <div class="empty-text">Record audio or upload a file to begin</div>
           </div>
 
-          <textarea
-            id="transcript-editor"
-            spellcheck="true"
-            placeholder="Transcript will appear here…"
-          ></textarea>
+          <textarea id="transcript-editor" spellcheck="true" placeholder="Transcript will appear here…"></textarea>
 
           <div class="processing-overlay" id="processing-overlay">
             <div class="spinner"></div>
-            <div class="processing-label" id="processing-label">
-              Processing…
-            </div>
+            <div class="processing-label" id="processing-label">Processing…</div>
             <div class="progress-block">
               <div class="progress-bar-track">
                 <div class="progress-bar-fill" id="progress-bar-fill"></div>
@@ -144,21 +119,45 @@
         </div>
       </main>
 
-      <!-- ── RIGHT PANEL: AI RESULTS ───────────────────── -->
+      <!-- ── RIGHT PANEL ──────────────────────────────────── -->
       <aside class="panel-right">
         <div class="panel-right-header">AI Results</div>
-        <div class="ai-results-panel" id="ai-results">
-          <div class="ai-empty-state" id="ai-empty-state">
-            <div class="ai-empty-glyph">✦</div>
-            <div class="ai-empty-text">
-              Summarize or auto-fix your transcript to see results here
-            </div>
-          </div>
-        </div>
+        <div class="ai-results-panel" id="ai-results"></div>
       </aside>
     </div>
 
     <div id="toast-container"></div>
+
+    <!-- Templates -->
+    <template id="tpl-job">
+      <div class="job-item">
+        <div class="job-name"></div>
+        <div class="job-meta">
+          <span class="job-status"></span>
+          <a class="job-download" title="Download" download style="display:none">⬇</a>
+          <button class="job-delete" title="Delete">✕</button>
+        </div>
+        <div class="job-progress"></div>
+      </div>
+    </template>
+
+    <template id="tpl-ai-result">
+      <div class="ai-result-block">
+        <div class="ai-result-header">
+          <span class="ai-result-badge"></span>
+          <span class="ai-result-time"></span>
+          <button class="ai-result-delete" title="Delete">✕</button>
+        </div>
+        <div class="ai-result-body"></div>
+        <div class="ai-result-progress">
+          <div class="ai-result-progress-fill"></div>
+        </div>
+        <div class="ai-result-actions">
+          <button class="btn btn-ghost ai-copy-btn">⎘ Copy</button>
+          <button class="btn btn-ghost ai-export-btn">↓ Export .md</button>
+        </div>
+      </div>
+    </template>
 
     <!-- Personal Names Modal -->
     <div class="modal" id="personal-names-modal">
@@ -170,8 +169,8 @@
         </div>
         <div class="modal-body">
           <p class="modal-hint">Enter names (one per line) that the AI should recognize and spell correctly during transcription fixes.</p>
-          <textarea 
-            id="personal-names-input" 
+          <textarea
+            id="personal-names-input"
             class="personal-names-textarea"
             placeholder="John Smith&#10;Jane Doe&#10;Michael Johnson"
             rows="8"
@@ -184,1037 +183,6 @@
       </div>
     </div>
 
-    <script>
-      // ─── State ────────────────────────────────────────────────────────────────────
-      let mediaRecorder = null;
-      let recordChunks = [];
-      let recordStream = null;
-      let recordStart = null;
-      let timerInterval = null;
-      let analyser = null;
-      let animFrame = null;
-      let activeJobId = null;
-      let pollInterval = null;
-      let jobStartTime = {};
-      let lastUpdateTime = {};
-      let lastProgress = {};
-      let elapsedInterval = null;
-      let appendMode = false;
-      let appendJobId = null;
-      let autoFixEnabled = localStorage.getItem("autoFixEnabled") === "true";
-      let currentJobId = null;
-      let voiceEditMode = false;
-      let voiceEditChunks = [];
-      let voiceEditRecorder = null;
-      let voiceEditStream = null;
-
-      // ─── DOM ──────────────────────────────────────────────────────────────────────
-      const recordBtn = document.getElementById("record-btn");
-      const appendBtn = document.getElementById("append-btn");
-      const timerEl = document.getElementById("timer");
-      const statusEl = document.getElementById("record-status");
-      const waveformCanvas = document.getElementById("waveform");
-      const ctx2d = waveformCanvas.getContext("2d");
-      const fileInput = document.getElementById("file-input");
-      const uploadZone = document.getElementById("upload-zone");
-      const jobsList = document.getElementById("jobs-list");
-      const editor = document.getElementById("transcript-editor");
-      const emptyState = document.getElementById("empty-state");
-      const processingOverlay = document.getElementById("processing-overlay");
-      const processingLabel = document.getElementById("processing-label");
-      const btnSummarize = document.getElementById("btn-summarize");
-      const btnGrammar = document.getElementById("btn-grammar");
-      const btnEditVoice = document.getElementById("btn-edit-voice");
-      const btnCopy = document.getElementById("btn-copy");
-      const btnExport = document.getElementById("btn-export");
-      const charCount = document.getElementById("char-count");
-      const aiResultsPanel = document.getElementById("ai-results");
-      const aiEmptyState = document.getElementById("ai-empty-state");
-
-
-      // ─── Collapsible sections ─────────────────────────────────────────────────────
-      function initToggle(labelId, bodyId) {
-        const label = document.getElementById(labelId);
-        const body = document.getElementById(bodyId);
-        if (!label || !body) return;
-        label.addEventListener("click", () => {
-          const collapsed = body.classList.toggle("collapsed");
-          label.classList.toggle("collapsed", collapsed);
-        });
-      }
-
-      initToggle("toggle-record", "body-record");
-      initToggle("toggle-upload", "body-upload");
-
-      // Jobs toggle
-      document
-        .getElementById("toggle-jobs")
-        .addEventListener("click", function () {
-          const list = document.getElementById("jobs-list");
-          const isCollapsed = list.classList.toggle("collapsed");
-          this.classList.toggle("collapsed", isCollapsed);
-        });
-
-      // ─── Toast ────────────────────────────────────────────────────────────────────
-      function toast(msg, type = "info") {
-        const t = document.createElement("div");
-        t.className = `toast ${type}`;
-        t.textContent = msg;
-        document.getElementById("toast-container").appendChild(t);
-        setTimeout(() => t.remove(), 4000);
-      }
-
-      // ─── Recording ────────────────────────────────────────────────────────────────
-      recordBtn.addEventListener("click", toggleRecord);
-      appendBtn.addEventListener("click", toggleAppendRecord);
-
-      // Append mode: toggle append recording
-      async function toggleAppendRecord() {
-        if (!activeJobId) {
-          toast("Select a recording first to append to", "error");
-          return;
-        }
-        if (mediaRecorder && mediaRecorder.state === "recording") {
-          stopRecording();
-        } else {
-          await startRecording(true);
-        }
-      }
-
-      async function toggleRecord() {
-        if (mediaRecorder && mediaRecorder.state === "recording") {
-          stopRecording();
-        } else {
-          await startRecording();
-        }
-      }
-
-      function getSupportedMimeType() {
-        const candidates = [
-          "audio/webm;codecs=opus",
-          "audio/webm",
-          "audio/mp4",
-          "audio/ogg;codecs=opus",
-          "audio/ogg",
-        ];
-        for (const t of candidates) {
-          if (MediaRecorder.isTypeSupported(t)) return t;
-        }
-        return "";
-      }
-
-      async function startRecording(isAppend = false) {
-        appendMode = isAppend;
-        appendJobId = isAppend ? activeJobId : null;
-        
-        try {
-          recordStream = await navigator.mediaDevices.getUserMedia({
-            audio: true,
-          });
-        } catch (e) {
-          toast(`Microphone access denied: ${e.message}`, "error");
-          return;
-        }
-        recordChunks = [];
-        const audioCtx = new AudioContext();
-        const source = audioCtx.createMediaStreamSource(recordStream);
-        analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 256;
-        source.connect(analyser);
-        drawWaveform();
-
-        const mimeType = getSupportedMimeType();
-        try {
-          mediaRecorder = new MediaRecorder(
-            recordStream,
-            mimeType ? { mimeType } : {},
-          );
-        } catch (e) {
-          toast(`Recording not supported: ${e.message}`, "error");
-          return;
-        }
-        mediaRecorder.ondataavailable = (e) => {
-          if (e.data && e.data.size > 0) recordChunks.push(e.data);
-        };
-        mediaRecorder.onstop = submitRecording;
-        mediaRecorder.onerror = (e) =>
-          toast(`Recording error: ${e.error?.message || e}`, "error");
-        mediaRecorder.start(250);
-
-        recordStart = Date.now();
-        timerInterval = setInterval(updateTimer, 500);
-        recordBtn.classList.add("recording");
-        if (isAppend) {
-          appendBtn.classList.add("recording");
-          statusEl.textContent = "Appending… click to stop";
-        } else {
-          statusEl.textContent = "Recording… click to stop";
-        }
-        statusEl.classList.add("active");
-      }
-
-      function stopRecording() {
-        if (mediaRecorder && mediaRecorder.state !== "inactive")
-          mediaRecorder.stop();
-        if (recordStream) recordStream.getTracks().forEach((t) => t.stop());
-        clearInterval(timerInterval);
-        cancelAnimationFrame(animFrame);
-        recordBtn.classList.remove("recording");
-        appendBtn.classList.remove("recording");
-        statusEl.textContent = "Uploading…";
-        statusEl.classList.remove("active");
-        timerEl.textContent = "";
-        ctx2d.clearRect(0, 0, waveformCanvas.width, waveformCanvas.height);
-      }
-
-      async function submitRecording() {
-        const mimeType = mediaRecorder?.mimeType || "audio/webm";
-        const ext = mimeType.includes("mp4")
-          ? "mp4"
-          : mimeType.includes("ogg")
-            ? "ogg"
-            : "webm";
-        const blob = new Blob(recordChunks, { type: mimeType });
-        if (blob.size < 1000) {
-          toast("Recording too short or empty — try again", "error");
-          statusEl.textContent = "Click to start recording";
-          return;
-        }
-        const fd = new FormData();
-        fd.append("audio", blob, `recording.${ext}`);
-        
-        // If in append mode, send the job_id to append to
-        if (appendMode && appendJobId) {
-          fd.append("append_to", appendJobId);
-        }
-        
-        try {
-          const res = await fetch("/api/record", { method: "POST", body: fd });
-          const data = await res.json();
-          if (data.job_id) {
-            // If append mode, we don't create a new job element, we just re-transcribe
-            if (appendMode && appendJobId) {
-              // Update the existing job - re-run transcription
-              toast("Appended audio, re-transcribing…", "success");
-              watchJob(appendJobId);
-              selectJob(appendJobId);
-            } else {
-              addJob({
-                id: data.job_id,
-                filename: `recording.${ext}`,
-                status: "queued",
-                progress: 0,
-              });
-              watchJob(data.job_id);
-              selectJob(data.job_id);
-              toast("Recording submitted");
-            }
-          } else {
-            toast(`Server error: ${data.error}`, "error");
-          }
-        } catch (e) {
-          toast(`Upload failed: ${e.message}`, "error");
-        }
-        // Reset append mode
-        appendMode = false;
-        appendJobId = null;
-        statusEl.textContent = "Click to start recording";
-      }
-
-      function updateTimer() {
-        const s = Math.floor((Date.now() - recordStart) / 1000);
-        timerEl.textContent = `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
-      }
-
-      function drawWaveform() {
-        animFrame = requestAnimationFrame(drawWaveform);
-        const data = new Uint8Array(analyser.frequencyBinCount);
-        analyser.getByteTimeDomainData(data);
-        const W = waveformCanvas.offsetWidth,
-          H = waveformCanvas.offsetHeight;
-        waveformCanvas.width = W;
-        waveformCanvas.height = H;
-        ctx2d.clearRect(0, 0, W, H);
-        ctx2d.strokeStyle = "#c4a882";
-        ctx2d.lineWidth = 1.5;
-        ctx2d.beginPath();
-        const step = W / data.length;
-        for (let i = 0; i < data.length; i++) {
-          const y = (data[i] / 128.0) * (H / 2);
-          i === 0 ? ctx2d.moveTo(i * step, y) : ctx2d.lineTo(i * step, y);
-        }
-        ctx2d.stroke();
-      }
-
-      // ─── File Upload ──────────────────────────────────────────────────────────────
-      fileInput.addEventListener("change", (e) => {
-        if (e.target.files[0]) uploadFile(e.target.files[0]);
-      });
-      uploadZone.addEventListener("dragover", (e) => {
-        e.preventDefault();
-        uploadZone.classList.add("drag-over");
-      });
-      uploadZone.addEventListener("dragleave", () =>
-        uploadZone.classList.remove("drag-over"),
-      );
-      uploadZone.addEventListener("drop", (e) => {
-        e.preventDefault();
-        uploadZone.classList.remove("drag-over");
-        if (e.dataTransfer.files[0]) uploadFile(e.dataTransfer.files[0]);
-      });
-
-      async function uploadFile(file) {
-        const fd = new FormData();
-        fd.append("file", file);
-        toast(`Uploading ${file.name}…`);
-        try {
-          const res = await fetch("/api/upload", { method: "POST", body: fd });
-          const data = await res.json();
-          if (data.error) {
-            toast(data.error, "error");
-            return;
-          }
-          addJob({
-            id: data.job_id,
-            filename: file.name,
-            status: "queued",
-            progress: 0,
-          });
-          watchJob(data.job_id);
-          toast("File uploaded — transcribing…", "success");
-        } catch (e) {
-          toast("Upload failed", "error");
-        }
-      }
-
-      // ─── Jobs ─────────────────────────────────────────────────────────────────────
-      let jobElements = {};
-
-      function addJob(job) {
-        const el = document.createElement("div");
-        el.className = "job-item";
-        el.dataset.id = job.id;
-        const hasRecording = !!job.recording;
-        el.innerHTML = `
-          <div class="job-name">${job.filename}</div>
-          <div class="job-meta">
-            <span class="job-status status-${job.status}">${job.status}</span>
-            ${hasRecording ? `<a class="job-download" href="/api/jobs/${job.id}/download" title="Download" download>⬇</a>` : ""}
-            <button class="job-delete" title="Delete" data-id="${job.id}">✕</button>
-          </div>
-          <div class="job-progress" style="width:${job.progress || 0}%"></div>`;
-        el.querySelector(".job-delete").addEventListener("click", (e) => {
-          e.stopPropagation();
-          deleteJob(job.id);
-        });
-        if (hasRecording)
-          el.querySelector(".job-download").addEventListener("click", (e) =>
-            e.stopPropagation(),
-          );
-        el.addEventListener("click", () => selectJob(job.id));
-        jobsList.prepend(el);
-        jobElements[job.id] = el;
-      }
-
-      function updateJobEl(job) {
-        const el = jobElements[job.id];
-        if (!el) return;
-        el.querySelector(".job-status").className =
-          `job-status status-${job.status}`;
-        el.querySelector(".job-status").textContent = job.status;
-        el.querySelector(".job-progress").style.width =
-          (job.progress || 0) + "%";
-        if (job.status === "done")
-          el.querySelector(".job-progress").style.background = "var(--green)";
-        if (job.status === "error")
-          el.querySelector(".job-progress").style.background = "var(--red)";
-      }
-
-      function selectJob(id) {
-        document
-          .querySelectorAll(".job-item")
-          .forEach((e) => e.classList.remove("active"));
-        if (jobElements[id]) jobElements[id].classList.add("active");
-        activeJobId = id;
-        fetch(`/api/status/${id}`)
-          .then((r) => r.json())
-          .then((job) => {
-            if (job.status === "done" && job.transcript) {
-              showTranscript(job.transcript, job.ai_results);
-            } else if (job.status === "error") {
-              toast(`Error: ${job.error}`, "error");
-            } else {
-              showProcessing(job.status);
-            }
-          });
-      }
-
-      async function deleteJob(id) {
-        await fetch(`/api/jobs/${id}`, { method: "DELETE" });
-        const el = jobElements[id];
-        if (el) el.remove();
-        delete jobElements[id];
-        if (activeJobId === id) {
-          activeJobId = null;
-          editor.style.display = "none";
-          emptyState.style.display = "flex";
-          setEditorButtons(false);
-          charCount.textContent = "";
-          renderAiResults([]);
-        }
-      }
-
-      function watchJob(id) {
-        currentJobId = id;
-        if (!jobStartTime[id]) jobStartTime[id] = Date.now();
-        if (!lastUpdateTime[id]) lastUpdateTime[id] = Date.now();
-        if (activeJobId === id) startElapsedTimer(id);
-
-        const poll = setInterval(async () => {
-          const res = await fetch(`/api/status/${id}`);
-          const job = await res.json();
-          updateJobEl(job);
-          
-          // Update header progress bar for active job
-          if (activeJobId === id) {
-            updateHeaderProgress(job.status, job.progress);
-          }
-          
-          if (job.progress !== lastProgress[id]) {
-            lastProgress[id] = job.progress;
-            lastUpdateTime[id] = Date.now();
-          }
-          if (job.status === "done" || job.status === "error") {
-            clearInterval(poll);
-            stopElapsedTimer();
-            delete jobStartTime[id];
-            delete lastUpdateTime[id];
-            delete lastProgress[id];
-            
-            // Hide header progress when done
-            hideHeaderProgress();
-            
-            if (job.status === "done") {
-              toast("Transcription complete!", "success");
-              if (activeJobId === id || !activeJobId) {
-                showTranscript(job.transcript, job.ai_results);
-                selectJob(id);
-              }
-              // Auto-trigger grammar fix if enabled
-              if (autoFixEnabled && job.transcript) {
-                triggerAutoFix(id, job.transcript);
-              }
-            } else {
-              toast(`Job failed: ${job.error}`, "error");
-              if (activeJobId === id) hideProcessing();
-            }
-          } else {
-            if (activeJobId === id) updateProgressUI(job.status, job.progress);
-          }
-        }, 1500);
-      }
-
-
-      // ─── Editor ───────────────────────────────────────────────────────────────────
-      function showTranscript(text, aiResults) {
-        emptyState.style.display = "none";
-        processingOverlay.classList.remove("active");
-        editor.style.display = "block";
-        editor.value = text;
-        updateCharCount();
-        setEditorButtons(true);
-        renderAiResults(aiResults || []);
-      }
-
-      function showProcessing(label, pct) {
-        emptyState.style.display = "none";
-        processingOverlay.classList.add("active");
-        editor.style.display = "none";
-        renderAiResults([]);
-        setEditorButtons(false);
-        updateProgressUI(label, pct || 0);
-      }
-
-      function updateProgressUI(label, pct) {
-        const stageMap = {
-          queued: "Queued…",
-          converting: "Converting to audio…",
-          transcribing: "Transcribing…",
-        };
-        processingLabel.textContent = stageMap[label] || label + "…";
-        document.getElementById("progress-bar-fill").style.width = pct + "%";
-        document.getElementById("progress-pct").textContent =
-          pct > 0 ? pct + "%" : "";
-      }
-
-      function startElapsedTimer(jobId) {
-        clearInterval(elapsedInterval);
-        elapsedInterval = setInterval(() => {
-          const start = jobStartTime[jobId];
-          if (!start) return;
-          const elapsed = Math.floor((Date.now() - start) / 1000);
-          const m = String(Math.floor(elapsed / 60)).padStart(2, "0");
-          const s = String(elapsed % 60).padStart(2, "0");
-          document.getElementById("progress-elapsed").textContent = `${m}:${s}`;
-          const lastUpd = lastUpdateTime[jobId];
-          if (lastUpd) {
-            const stale = Math.floor((Date.now() - lastUpd) / 1000);
-            const el = document.getElementById("progress-last-update");
-            if (stale > 10) {
-              el.textContent = `last update ${stale}s ago`;
-              el.style.color = stale > 30 ? "var(--red)" : "var(--muted)";
-            } else {
-              el.textContent = "";
-            }
-          }
-        }, 1000);
-      }
-
-      function stopElapsedTimer() {
-        clearInterval(elapsedInterval);
-        document.getElementById("progress-elapsed").textContent = "";
-        document.getElementById("progress-last-update").textContent = "";
-        document.getElementById("progress-pct").textContent = "";
-        document.getElementById("progress-bar-fill").style.width = "0%";
-      }
-
-      function hideProcessing() {
-        processingOverlay.classList.remove("active");
-      }
-
-      function setEditorButtons(on) {
-        btnSummarize.disabled = !on;
-        btnGrammar.disabled = !on;
-        btnEditVoice.disabled = !on;
-        btnCopy.disabled = !on;
-        btnExport.disabled = !on;
-      }
-
-      editor.addEventListener("input", updateCharCount);
-      function updateCharCount() {
-        const n = editor.value.length;
-        charCount.textContent = n > 0 ? `${n.toLocaleString()} chars` : "";
-      }
-
-      // ─── Toolbar ──────────────────────────────────────────────────────────────────
-      btnCopy.addEventListener("click", () => {
-        navigator.clipboard
-          .writeText(editor.value)
-          .then(() => toast("Copied!", "success"));
-      });
-
-      btnExport.addEventListener("click", () => {
-        const blob = new Blob([`# Transcript\n\n${editor.value}\n`], {
-          type: "text/markdown",
-        });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "transcript.md";
-        a.click();
-        URL.revokeObjectURL(url);
-        toast("Exported as Markdown", "success");
-      });
-
-      // ─── AI Results ───────────────────────────────────────────────────────────────
-      function escHtml(str) {
-        return str
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;");
-      }
-
-      function renderAiResults(aiResults) {
-        // Keep the panel container but clear dynamic blocks
-        aiResultsPanel.innerHTML = "";
-
-        if (!aiResults || aiResults.length === 0) {
-          aiResultsPanel.innerHTML = `
-            <div class="ai-empty-state">
-              <div class="ai-empty-glyph">✦</div>
-              <div class="ai-empty-text">Summarize or auto-fix your transcript to see results here</div>
-            </div>`;
-          return;
-        }
-
-        // Sort: grammar fixes first, then summaries — newest on top within each group
-        const sorted = [...aiResults]
-          .map((r, idx) => ({ ...r, originalIdx: idx }))
-          .sort((a, b) => {
-            if (a.mode === b.mode) return b.created_at - a.created_at;
-            return a.mode === "grammar" ? -1 : 1;
-          });
-
-        sorted.forEach((r) => {
-          const idx = r.originalIdx;
-          const label = r.mode === "summarize" ? "⚡ Summary" : "✦ Grammar Fix";
-          const badgeCls =
-            r.mode === "summarize" ? "badge-summarize" : "badge-grammar";
-          const timeStr = new Date(r.created_at * 1000).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          });
-          const block = document.createElement("div");
-          block.className = "ai-result-block";
-
-          block.innerHTML = `
-              <div class="ai-result-header">
-                <span class="ai-result-badge ${badgeCls}">${label}</span>
-                <span class="ai-result-time">${timeStr}</span>
-                <button class="ai-result-delete" title="Delete">✕</button>
-              </div>
-              <div class="ai-result-body">${escHtml(r.text)}</div>
-              <div class="ai-result-progress">
-                <div class="ai-result-progress-fill" style="width: ${r.progress || 0}%"></div>
-              </div>
-              <div class="ai-result-actions">
-                <button class="btn btn-ghost ai-copy-btn">⎘ Copy</button>
-                <button class="btn btn-ghost ai-export-btn">↓ Export .md</button>
-              </div>`;
-
-          block
-            .querySelector(".ai-result-header")
-            .addEventListener("click", (e) => {
-              if (e.target.classList.contains("ai-result-delete")) return;
-              block
-                .querySelector(".ai-result-body")
-                .classList.toggle("collapsed");
-              block
-                .querySelector(".ai-result-actions")
-                .classList.toggle("collapsed");
-            });
-
-          block.querySelector(".ai-copy-btn").addEventListener("click", () => {
-            navigator.clipboard
-              .writeText(r.text)
-              .then(() => toast("Copied!", "success"));
-          });
-
-          block
-            .querySelector(".ai-export-btn")
-            .addEventListener("click", () => {
-              const lbl = r.mode === "summarize" ? "Summary" : "Grammar-Fix";
-              const blob = new Blob([`# ${lbl}\n\n${r.text}\n`], {
-                type: "text/markdown",
-              });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = `${lbl.toLowerCase()}.md`;
-              a.click();
-              URL.revokeObjectURL(url);
-              toast(`Exported ${lbl}`, "success");
-            });
-
-          block
-            .querySelector(".ai-result-delete")
-            .addEventListener("click", async (e) => {
-              e.stopPropagation();
-              if (!activeJobId) return;
-              const res = await fetch(`/api/jobs/${activeJobId}/ai/${idx}`, {
-                method: "DELETE",
-              });
-              if (res.ok) {
-                const data = await res.json();
-                renderAiResults(data.ai_results);
-                toast("Deleted", "success");
-              }
-            });
-
-          aiResultsPanel.appendChild(block);
-        });
-      }
-
-      async function aiAction(mode) {
-        const text = editor.value;
-        if (!text.trim()) return;
-        const btn = mode === "summarize" ? btnSummarize : btnGrammar;
-        const origText = btn.textContent;
-        btn.disabled = true;
-        btn.textContent = "…";
-        try {
-          const res = await fetch("/api/ai", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text, mode, job_id: activeJobId }),
-          });
-          const data = await res.json();
-          if (data.error) {
-            toast(data.hint || data.detail || data.error, "error");
-          } else {
-            if (activeJobId) {
-              const jobRes = await fetch(`/api/status/${activeJobId}`);
-              const job = await jobRes.json();
-              renderAiResults(job.ai_results || []);
-            }
-            toast(
-              `${mode === "summarize" ? "Summary" : "Grammar fix"} saved`,
-              "success",
-            );
-          }
-        } catch (e) {
-          toast(`AI request failed: ${e.message}`, "error");
-        } finally {
-          btn.disabled = false;
-          btn.textContent = origText;
-          btnSummarize.disabled = false;
-          btnGrammar.disabled = false;
-        }
-      }
-
-      btnSummarize.addEventListener("click", () => aiAction("summarize"));
-      btnGrammar.addEventListener("click", () => aiAction("grammar"));
-
-      // ─── Voice Edit ─────────────────────────────────────────────────────────────
-      btnEditVoice.addEventListener("click", toggleVoiceEdit);
-
-      async function toggleVoiceEdit() {
-        if (voiceEditMode) {
-          stopVoiceEdit();
-        } else {
-          await startVoiceEdit();
-        }
-      }
-
-      async function startVoiceEdit() {
-        const text = editor.value;
-        if (!text.trim()) {
-          toast("No text in editor to edit", "error");
-          return;
-        }
-        
-        try {
-          voiceEditStream = await navigator.mediaDevices.getUserMedia({
-            audio: true,
-          });
-        } catch (e) {
-          toast(`Microphone access denied: ${e.message}`, "error");
-          return;
-        }
-        
-        voiceEditChunks = [];
-        const mimeType = getSupportedMimeType();
-        try {
-          voiceEditRecorder = new MediaRecorder(
-            voiceEditStream,
-            mimeType ? { mimeType } : {},
-          );
-        } catch (e) {
-          toast(`Recording not supported: ${e.message}`, "error");
-          return;
-        }
-        
-        voiceEditRecorder.ondataavailable = (e) => {
-          if (e.data && e.data.size > 0) voiceEditChunks.push(e.data);
-        };
-        voiceEditRecorder.onstop = submitVoiceEdit;
-        voiceEditRecorder.onerror = (e) => {
-          toast(`Recording error: ${e.error?.message || e}`, "error");
-          hideVoiceEditProgress();
-        };
-        voiceEditRecorder.start(250);
-        
-        voiceEditMode = true;
-        btnEditVoice.classList.add("recording");
-        
-        // Show progress in header like recording does
-        showVoiceEditProgress("Recording edit commands…", 10);
-        toast("Recording edit commands… speak now");
-      }
-
-      function showVoiceEditProgress(label, pct) {
-        const headerProgress = document.getElementById("header-progress");
-        const fill = document.getElementById("header-progress-fill");
-        const labelEl = document.getElementById("header-progress-label");
-        
-        headerProgress.classList.add("active", "ai-progress");
-        if (fill) fill.style.width = pct + "%";
-        if (labelEl) labelEl.textContent = `${label} ${pct}%`;
-      }
-
-      function hideVoiceEditProgress() {
-        const headerProgress = document.getElementById("header-progress");
-        const fill = document.getElementById("header-progress-fill");
-        const labelEl = document.getElementById("header-progress-label");
-        
-        if (fill) fill.style.width = "0%";
-        if (labelEl) labelEl.textContent = "";
-        
-        setTimeout(() => {
-          headerProgress.classList.remove("active");
-          headerProgress.classList.remove("ai-progress");
-        }, 1000);
-      }
-
-      function stopVoiceEdit() {
-        if (voiceEditRecorder && voiceEditRecorder.state !== "inactive")
-          voiceEditRecorder.stop();
-        if (voiceEditStream) voiceEditStream.getTracks().forEach((t) => t.stop());
-        
-        voiceEditMode = false;
-        btnEditVoice.classList.remove("recording");
-        
-        hideVoiceEditProgress();
-      }
-
-      async function submitVoiceEdit() {
-        const mimeType = voiceEditRecorder?.mimeType || "audio/webm";
-        const ext = mimeType.includes("mp4")
-          ? "mp4"
-          : mimeType.includes("ogg")
-            ? "ogg"
-            : "webm";
-        const blob = new Blob(voiceEditChunks, { type: mimeType });
-        
-        if (blob.size < 1000) {
-          hideVoiceEditProgress();
-          toast("Recording too short — try again", "error");
-          voiceEditMode = false;
-          btnEditVoice.classList.remove("recording");
-          return;
-        }
-        
-        // Update progress - transcribing
-        showVoiceEditProgress("Transcribing", 40);
-        
-        const currentText = editor.value;
-        const fd = new FormData();
-        fd.append("audio", blob, `voice_edit.${ext}`);
-        fd.append("text", currentText);
-        fd.append("mode", "edit");
-        
-        try {
-          const res = await fetch("/api/ai", {
-            method: "POST",
-            body: fd,
-          });
-          
-          // Update progress - AI processing
-          showVoiceEditProgress("Applying edit", 70);
-          
-          const data = await res.json();
-          
-          if (data.error) {
-            hideVoiceEditProgress();
-            toast(data.hint || data.detail || data.error, "error");
-          } else if (data.text) {
-            // Update progress - complete
-            showVoiceEditProgress("Done", 100);
-            
-            // Replace editor content with the edited result
-            editor.value = data.text;
-            updateCharCount();
-            
-            setTimeout(() => {
-              hideVoiceEditProgress();
-              toast("Text edited successfully", "success");
-            }, 500);
-            
-            // Also save as AI result
-            if (activeJobId) {
-              const jobRes = await fetch(`/api/status/${activeJobId}`);
-              const job = await jobRes.json();
-              renderAiResults(job.ai_results || []);
-            }
-          } else {
-            hideVoiceEditProgress();
-            toast("No result returned", "error");
-          }
-        } catch (e) {
-          hideVoiceEditProgress();
-          toast(`Edit failed: ${e.message}`, "error");
-        }
-        
-        // Reset voice edit state
-        voiceEditMode = false;
-        btnEditVoice.classList.remove("recording");
-      }
-
-
-
-      // ─── Header Progress Bar ─────────────────────────────────────────────────────
-      function updateHeaderProgress(label, pct) {
-        const headerProgress = document.getElementById("header-progress");
-        const fill = document.getElementById("header-progress-fill");
-        const labelEl = document.getElementById("header-progress-label");
-        
-        // Show the progress bar when there's activity
-        if (pct > 0 && pct < 100) {
-          headerProgress.classList.add("active");
-        }
-        
-        if (fill) fill.style.width = pct + "%";
-        if (labelEl) {
-          const stageMap = {
-            queued: "Queued",
-            converting: "Converting",
-            transcribing: "Transcribing",
-          };
-          labelEl.textContent = pct > 0 && pct < 100 ? `${stageMap[label] || label} ${pct}%` : "";
-        }
-      }
-
-      function hideHeaderProgress() {
-        const headerProgress = document.getElementById("header-progress");
-        const fill = document.getElementById("header-progress-fill");
-        const labelEl = document.getElementById("header-progress-label");
-        if (fill) fill.style.width = "0%";
-        if (labelEl) labelEl.textContent = "";
-        // Keep it visible briefly then hide
-        setTimeout(() => {
-          headerProgress.classList.remove("active");
-          headerProgress.classList.remove("ai-progress");
-        }, 1000);
-      }
-
-      function showAiProgress(label, pct) {
-        const headerProgress = document.getElementById("header-progress");
-        const fill = document.getElementById("header-progress-fill");
-        const labelEl = document.getElementById("header-progress-label");
-        
-        headerProgress.classList.add("active", "ai-progress");
-        
-        if (fill) fill.style.width = pct + "%";
-        if (labelEl) {
-          labelEl.textContent = pct > 0 && pct < 100 ? `${label} ${pct}%` : "";
-        }
-      }
-
-      // ─── Auto-fix Toggle ───────────────────────────────────────────────────────
-      const autoFixToggle = document.getElementById("auto-fix-toggle");
-      autoFixToggle.checked = autoFixEnabled;
-      autoFixToggle.addEventListener("change", (e) => {
-        autoFixEnabled = e.target.checked;
-        localStorage.setItem("autoFixEnabled", autoFixEnabled);
-      });
-
-      // Auto-trigger grammar fix if enabled
-      async function triggerAutoFix(jobId, transcript) {
-        if (!autoFixEnabled || !transcript) return;
-        
-        toast("Auto-fixing transcript…", "info");
-        
-        // Show AI progress in header - force it to show immediately
-        const headerProgress = document.getElementById("header-progress");
-        const fill = document.getElementById("header-progress-fill");
-        const labelEl = document.getElementById("header-progress-label");
-        
-        headerProgress.classList.add("active", "ai-progress");
-        if (fill) fill.style.width = "50%";
-        if (labelEl) labelEl.textContent = "Auto-fixing 50%";
-        
-        try {
-          const res = await fetch("/api/ai", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: transcript, mode: "grammar", job_id: jobId }),
-          });
-          const data = await res.json();
-          if (data.error) {
-            toast(data.hint || data.detail || data.error, "error");
-            hideHeaderProgress();
-          } else {
-            // Show completion in header
-            if (fill) fill.style.width = "100%";
-            if (labelEl) labelEl.textContent = "Complete";
-            toast("Auto-fix complete!", "success");
-            // Refresh the job to show the new AI result
-            const jobRes = await fetch(`/api/status/${jobId}`);
-            const job = await jobRes.json();
-            if (job.ai_results) {
-              renderAiResults(job.ai_results);
-            }
-            setTimeout(hideHeaderProgress, 2000);
-          }
-        } catch (e) {
-          toast(`Auto-fix failed: ${e.message}`, "error");
-          hideHeaderProgress();
-        }
-      }
-
-      // ─── Init ─────────────────────────────────────────────────────────────────────
-      (async function init() {
-        try {
-          const res = await fetch("/api/jobs");
-          const list = await res.json();
-          [...list].reverse().forEach((job) => {
-            addJob(job);
-            if (job.status !== "done" && job.status !== "error")
-              watchJob(job.id);
-          });
-          const done = list.find((j) => j.status === "done");
-          if (done) selectJob(done.id);
-        } catch (e) {
-          /* server not ready */
-        }
-      })();
-      function updateAiProgress(idx, pct) {
-        const block = aiResultsPanel.querySelectorAll(".ai-result-block")[idx];
-        if (!block) return;
-        const fill = block.querySelector(".ai-result-progress-fill");
-        if (fill) fill.style.width = (pct || 0) + "%";
-      }
-
-      // Optional: call this after renderAiResults to initialize/update
-      function refreshAiProgress(job) {
-        job.ai_results?.forEach((r, idx) => updateAiProgress(idx, r.progress));
-      }
-
-      // ─── Personal Names Modal ───────────────────────────────────────────────────
-      const personalNamesBtn = document.getElementById("btn-personal-names");
-      const personalNamesModal = document.getElementById("personal-names-modal");
-      const personalNamesInput = document.getElementById("personal-names-input");
-      const closeNamesModal = document.getElementById("close-names-modal");
-      const cancelNamesModal = document.getElementById("cancel-names-modal");
-      const saveNamesModal = document.getElementById("save-names-modal");
-
-      function openPersonalNamesModal() {
-        personalNamesModal.classList.add("active");
-        // Fetch current names
-        fetch("/api/personal-names")
-          .then(r => r.json())
-          .then(data => {
-            personalNamesInput.value = (data.names || []).join("\n");
-          })
-          .catch(() => {
-            personalNamesInput.value = "";
-          });
-      }
-
-      function closePersonalNamesModal() {
-        personalNamesModal.classList.remove("active");
-      }
-
-      async function savePersonalNames() {
-        const text = personalNamesInput.value;
-        // Split by newlines and filter empty lines
-        const names = text.split("\n").map(n => n.trim()).filter(n => n);
-        
-        try {
-          const res = await fetch("/api/personal-names", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ names })
-          });
-          const data = await res.json();
-          if (data.error) {
-            toast(data.error, "error");
-          } else {
-            toast("Personal names saved", "success");
-            closePersonalNamesModal();
-          }
-        } catch (e) {
-          toast(`Failed to save: ${e.message}`, "error");
-        }
-      }
-
-      personalNamesBtn.addEventListener("click", openPersonalNamesModal);
-      closeNamesModal.addEventListener("click", closePersonalNamesModal);
-      cancelNamesModal.addEventListener("click", closePersonalNamesModal);
-      saveNamesModal.addEventListener("click", savePersonalNames);
-
-      // Close modal on backdrop click
-      personalNamesModal.querySelector(".modal-backdrop").addEventListener("click", closePersonalNamesModal);
-    </script>
+    <script src="../static/js/app.js"></script>
   </body>
 </html>
