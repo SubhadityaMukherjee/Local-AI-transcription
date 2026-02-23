@@ -105,7 +105,7 @@ class AIService:
             method="POST",
         )
 
-        with urlreq.urlopen(req, timeout=120) as resp:
+        with urlreq.urlopen(req, timeout=600) as resp:
             result = json.loads(resp.read())
 
         return result["choices"][0]["message"]["content"]

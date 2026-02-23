@@ -852,12 +852,14 @@ canvas#waveform {
   border-radius: 4px;
   overflow: hidden;
   margin-top: 8px;
+  width: 100%;
+  position: relative;
 }
 
 .ai-result-progress-fill,
 #progress-bar-fill,
 #header-progress-fill {
-  position: relative; /* Changed from absolute to relative */
+  position: relative; /* Keep relative positioning for proper layout */
   overflow: hidden; /* contains shimmer */
 }
 

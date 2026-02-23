@@ -663,7 +663,6 @@ async function aiAction(mode) {
   const text = dom.editor.value;
   if (!text.trim()) return;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 45000);
 
   const btn = mode === "summarize" ? dom.btnSummarize : dom.btnGrammar;
   const origText = btn.textContent;
@@ -689,7 +688,7 @@ async function aiAction(mode) {
     }
   } catch (e) {
     if (e.name === "AbortError") {
-      toast("AI request timed out (45s)", "error");
+      toast("AI request timed out", "error");
     } else {
       toast(`AI request failed: ${e.message}`, "error");
     }

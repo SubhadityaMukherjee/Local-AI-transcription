@@ -17,7 +17,7 @@ err() {
 section() { echo -e "\n${BOLD}── $* ──${RESET}"; }
 
 # Model used for summarize / grammar fix — fast and high quality on M-series
-OLLAMA_MODEL="qwen2.5:14b-instruct"
+OLLAMA_MODEL="qwen2.5:14b-instruct-q4_K_M"
 
 # ── 0. Prereq checks ──────────────────────────────────────────────────────────
 section "Checking prerequisites"
