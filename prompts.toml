@@ -13,6 +13,7 @@ input_placeholder = "Transcript: {text}"
 instruction = "Clean the text and apply spoken structural commands."
 rules = [
   "Fix grammar, spelling, spacing, and punctuation only.",
+  "Do not be too creative.",
   "Preserve original meaning and tone.",
   "Do NOT summarize.",
   "Do NOT rephrase for style.",
@@ -40,7 +41,7 @@ rules = [
   "If no list command is present in the input, do NOT create bullet or numbered lists.",
   "Do NOT introduce any Markdown structure that was not explicitly commanded.",
   "Preserve paragraph form exactly unless a structural command modifies it.",
-  "Return only final Markdown.",
+  "Return only final Markdown and nothing else.",
 ]
 input_placeholder = "Text: {text}"
 
