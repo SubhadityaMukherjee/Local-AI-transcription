@@ -310,7 +310,7 @@ def register_routes(app: Flask, config, job_store, transcription_service, ai_ser
                 "debug_log": j.get("debug_log", "(no log yet)"),
                 "cmd": (
                     f"{config.WHISPER_BIN} --model {config.WHISPER_MODEL}"
-                    f" --file <wav> --output-txt --threads {max(4, os.cpu_count() or 4)}"
+                    f" --file <wav> --output-txt --threads {max(4, os.cpu_count() or 4)} --vad"
                 ),
             }
         )
@@ -336,9 +336,16 @@ def register_routes(app: Flask, config, job_store, transcription_service, ai_ser
         """Start processing job in background thread."""
 
         def run():
-            vstatus, result = transcription_service.process(
-                src, job_id, lambda pct: job_store.update(job_id, progress=pct)
-            )
+            # Mark as converting immediately
+            job_store.update(job_id, status="converting", progress=5)
+
+            def on_progress(pct):
+                # Once we pass 30%, we are transcribing
+                status = "transcribing" if pct >= 30 else "converting"
+                job_store.update(job_id, progress=pct, status=status)
+
+            vstatus, result = transcription_service.process(src, job_id, on_progress)
+
             if vstatus == "done":
                 job_store.update(job_id, status="done", progress=100, transcript=result)
             else:

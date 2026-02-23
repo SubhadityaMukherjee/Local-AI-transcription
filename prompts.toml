@@ -13,6 +13,7 @@ input_placeholder = "Transcript: {text}"
 instruction = "Clean the text and apply spoken structural commands."
 rules = [
   "Fix grammar, spelling, spacing, and punctuation only.",
+  "You can split it into logical paragraphs if required.",
   "Do not be too creative.",
   "Preserve original meaning and tone.",
   "Do NOT summarize.",
@@ -86,7 +87,8 @@ rules = [
   "Do not invent content.",
   "Do not remove content unless explicitly instructed.",
   "Assume the input refers to the currently selected file.",
-  "Input may originate from text or transcribed audio."
+  "Input may originate from text or transcribed audio.",
 ]
 
 input_placeholder = "Text:\n{text}"
+

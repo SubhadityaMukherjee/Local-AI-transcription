@@ -183,7 +183,6 @@ h1 {
   padding: 0.3rem 0.6rem;
 }
 
-
 /* 3-column grid: left sidebar | main editor | right results panel */
 .layout {
   display: grid;
@@ -847,19 +846,48 @@ canvas#waveform {
   flex-direction: column;
 }
 .ai-result-progress {
-  width: 100%;
-  height: 6px;
-  background: var(--muted);
-  border-radius: 3px;
-  margin: 4px 0;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
   overflow: hidden;
+  margin-top: 8px;
 }
 
-.ai-result-progress-fill {
+.ai-result-progress-fill,
+#progress-bar-fill,
+#header-progress-fill {
+  position: absolute; /* VERY IMPORTANT */
+  overflow: hidden; /* contains shimmer */
+}
+
+.ai-result-progress-fill::after,
+#progress-bar-fill::after,
+#header-progress-fill::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
   height: 100%;
-  background: var(--green);
-  width: 0%;
-  transition: width 0.3s ease;
+  width: 100%;
+
+  background: linear-gradient(
+    120deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.25),
+    transparent 70%
+  );
+
+  animation: shimmer 1.6s linear infinite;
+
+  pointer-events: none; /* ← prevents blocking clicks */
+}
+@keyframes shimmer {
+  from {
+    left: -100%;
+  }
+  to {
+    left: 100%;
+  }
 }
 .ai-empty-state {
   flex: 1;

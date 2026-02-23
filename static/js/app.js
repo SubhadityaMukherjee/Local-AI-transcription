@@ -49,33 +49,33 @@ const state = {
 // ─── DOM refs ─────────────────────────────────────────────────────────────────
 
 const dom = {
-  recordBtn:          document.getElementById("record-btn"),
-  appendBtn:          document.getElementById("append-btn"),
-  timerEl:            document.getElementById("timer"),
-  statusEl:           document.getElementById("record-status"),
-  waveformCanvas:     document.getElementById("waveform"),
-  fileInput:          document.getElementById("file-input"),
-  uploadZone:         document.getElementById("upload-zone"),
-  jobsList:           document.getElementById("jobs-list"),
-  editor:             document.getElementById("transcript-editor"),
-  emptyState:         document.getElementById("empty-state"),
-  processingOverlay:  document.getElementById("processing-overlay"),
-  processingLabel:    document.getElementById("processing-label"),
-  progressBarFill:    document.getElementById("progress-bar-fill"),
-  progressPct:        document.getElementById("progress-pct"),
-  progressElapsed:    document.getElementById("progress-elapsed"),
+  recordBtn: document.getElementById("record-btn"),
+  appendBtn: document.getElementById("append-btn"),
+  timerEl: document.getElementById("timer"),
+  statusEl: document.getElementById("record-status"),
+  waveformCanvas: document.getElementById("waveform"),
+  fileInput: document.getElementById("file-input"),
+  uploadZone: document.getElementById("upload-zone"),
+  jobsList: document.getElementById("jobs-list"),
+  editor: document.getElementById("transcript-editor"),
+  emptyState: document.getElementById("empty-state"),
+  processingOverlay: document.getElementById("processing-overlay"),
+  processingLabel: document.getElementById("processing-label"),
+  progressBarFill: document.getElementById("progress-bar-fill"),
+  progressPct: document.getElementById("progress-pct"),
+  progressElapsed: document.getElementById("progress-elapsed"),
   progressLastUpdate: document.getElementById("progress-last-update"),
-  btnSummarize:       document.getElementById("btn-summarize"),
-  btnGrammar:         document.getElementById("btn-grammar"),
-  btnEditVoice:       document.getElementById("btn-edit-voice"),
-  btnCopy:            document.getElementById("btn-copy"),
-  btnExport:          document.getElementById("btn-export"),
-  charCount:          document.getElementById("char-count"),
-  aiResultsPanel:     document.getElementById("ai-results"),
-  headerProgress:     document.getElementById("header-progress"),
+  btnSummarize: document.getElementById("btn-summarize"),
+  btnGrammar: document.getElementById("btn-grammar"),
+  btnEditVoice: document.getElementById("btn-edit-voice"),
+  btnCopy: document.getElementById("btn-copy"),
+  btnExport: document.getElementById("btn-export"),
+  charCount: document.getElementById("char-count"),
+  aiResultsPanel: document.getElementById("ai-results"),
+  headerProgress: document.getElementById("header-progress"),
   headerProgressFill: document.getElementById("header-progress-fill"),
-  headerProgressLabel:document.getElementById("header-progress-label"),
-  autoFixToggle:      document.getElementById("auto-fix-toggle"),
+  headerProgressLabel: document.getElementById("header-progress-label"),
+  autoFixToggle: document.getElementById("auto-fix-toggle"),
   personalNamesModal: document.getElementById("personal-names-modal"),
   personalNamesInput: document.getElementById("personal-names-input"),
 };
@@ -96,7 +96,11 @@ function toast(msg, type = "info") {
 // Single unified function replaces: updateHeaderProgress, hideHeaderProgress,
 // showAiProgress, showVoiceEditProgress, hideVoiceEditProgress
 
-function setHeaderProgress(label = "", pct = 0, { aiMode = false, hide = false } = {}) {
+function setHeaderProgress(
+  label = "",
+  pct = 0,
+  { aiMode = false, hide = false } = {},
+) {
   const { headerProgress, headerProgressFill, headerProgressLabel } = dom;
 
   if (hide) {
@@ -166,7 +170,9 @@ async function startRecording(isAppend = false) {
   state.appendJobId = isAppend ? state.activeJobId : null;
 
   try {
-    state.recordStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    state.recordStream = await navigator.mediaDevices.getUserMedia({
+      audio: true,
+    });
   } catch (e) {
     toast(`Microphone access denied: ${e.message}`, "error");
     return;
@@ -183,7 +189,10 @@ async function startRecording(isAppend = false) {
 
   const mimeType = getSupportedMimeType();
   try {
-    state.mediaRecorder = new MediaRecorder(state.recordStream, mimeType ? { mimeType } : {});
+    state.mediaRecorder = new MediaRecorder(
+      state.recordStream,
+      mimeType ? { mimeType } : {},
+    );
   } catch (e) {
     toast(`Recording not supported: ${e.message}`, "error");
     return;
@@ -201,7 +210,9 @@ async function startRecording(isAppend = false) {
   state.timerInterval = setInterval(updateTimer, 500);
   dom.recordBtn.classList.add("recording");
   dom.appendBtn.classList.toggle("recording", isAppend);
-  dom.statusEl.textContent = isAppend ? "Appending… click to stop" : "Recording… click to stop";
+  dom.statusEl.textContent = isAppend
+    ? "Appending… click to stop"
+    : "Recording… click to stop";
   dom.statusEl.classList.add("active");
 }
 
@@ -231,7 +242,8 @@ async function submitRecording() {
 
   const fd = new FormData();
   fd.append("audio", blob, `recording.${ext}`);
-  if (state.appendMode && state.appendJobId) fd.append("append_to", state.appendJobId);
+  if (state.appendMode && state.appendJobId)
+    fd.append("append_to", state.appendJobId);
 
   try {
     const res = await fetch("/api/record", { method: "POST", body: fd });
@@ -242,7 +254,12 @@ async function submitRecording() {
         watchJob(state.appendJobId);
         selectJob(state.appendJobId);
       } else {
-        addJob({ id: data.job_id, filename: `recording.${ext}`, status: "queued", progress: 0 });
+        addJob({
+          id: data.job_id,
+          filename: `recording.${ext}`,
+          status: "queued",
+          progress: 0,
+        });
         watchJob(data.job_id);
         selectJob(data.job_id);
         toast("Recording submitted");
@@ -294,7 +311,7 @@ dom.uploadZone.addEventListener("dragover", (e) => {
   dom.uploadZone.classList.add("drag-over");
 });
 dom.uploadZone.addEventListener("dragleave", () =>
-  dom.uploadZone.classList.remove("drag-over")
+  dom.uploadZone.classList.remove("drag-over"),
 );
 dom.uploadZone.addEventListener("drop", (e) => {
   e.preventDefault();
@@ -309,9 +326,18 @@ async function uploadFile(file) {
   try {
     const res = await fetch("/api/upload", { method: "POST", body: fd });
     const data = await res.json();
-    if (data.error) { toast(data.error, "error"); return; }
-    addJob({ id: data.job_id, filename: file.name, status: "queued", progress: 0 });
+    if (data.error) {
+      toast(data.error, "error");
+      return;
+    }
+    addJob({
+      id: data.job_id,
+      filename: file.name,
+      status: "queued",
+      progress: 0,
+    });
     watchJob(data.job_id);
+    selectJob(data.job_id);
     toast("File uploaded — transcribing…", "success");
   } catch (e) {
     toast("Upload failed", "error");
@@ -362,7 +388,9 @@ function updateJobEl(job) {
 }
 
 function selectJob(id) {
-  dom.jobsList.querySelectorAll(".job-item").forEach((e) => e.classList.remove("active"));
+  dom.jobsList
+    .querySelectorAll(".job-item")
+    .forEach((e) => e.classList.remove("active"));
   state.jobElements.get(id)?.classList.add("active");
   state.activeJobId = id;
 
@@ -427,10 +455,12 @@ function watchJob(id) {
           showTranscript(job.transcript, job.ai_results);
           selectJob(id);
         }
-        if (state.autoFixEnabled && job.transcript) triggerAutoFix(id, job.transcript);
+        if (state.autoFixEnabled && job.transcript)
+          triggerAutoFix(id, job.transcript);
       } else {
         toast(`Job failed: ${job.error}`, "error");
-        if (state.activeJobId === id) dom.processingOverlay.classList.remove("active");
+        if (state.activeJobId === id)
+          dom.processingOverlay.classList.remove("active");
       }
     } else if (state.activeJobId === id) {
       updateProcessingUI(job.status, job.progress);
@@ -480,7 +510,8 @@ function startElapsedTimer(jobId) {
       const stale = Math.floor((Date.now() - lastUpd) / 1000);
       if (stale > 10) {
         dom.progressLastUpdate.textContent = `last update ${stale}s ago`;
-        dom.progressLastUpdate.style.color = stale > 30 ? "var(--red)" : "var(--muted)";
+        dom.progressLastUpdate.style.color =
+          stale > 30 ? "var(--red)" : "var(--muted)";
       } else {
         dom.progressLastUpdate.textContent = "";
       }
@@ -497,8 +528,13 @@ function stopElapsedTimer() {
 }
 
 function setEditorButtons(on) {
-  [dom.btnSummarize, dom.btnGrammar, dom.btnEditVoice, dom.btnCopy, dom.btnExport]
-    .forEach((btn) => (btn.disabled = !on));
+  [
+    dom.btnSummarize,
+    dom.btnGrammar,
+    dom.btnEditVoice,
+    dom.btnCopy,
+    dom.btnExport,
+  ].forEach((btn) => (btn.disabled = !on));
 }
 
 dom.editor.addEventListener("input", updateCharCount);
@@ -510,7 +546,9 @@ function updateCharCount() {
 // ─── Toolbar ──────────────────────────────────────────────────────────────────
 
 dom.btnCopy.addEventListener("click", () => {
-  navigator.clipboard.writeText(dom.editor.value).then(() => toast("Copied!", "success"));
+  navigator.clipboard
+    .writeText(dom.editor.value)
+    .then(() => toast("Copied!", "success"));
 });
 
 dom.btnExport.addEventListener("click", () => {
@@ -519,8 +557,13 @@ dom.btnExport.addEventListener("click", () => {
 });
 
 function downloadMarkdown(filename, content) {
-  const url = URL.createObjectURL(new Blob([content], { type: "text/markdown" }));
-  const a = Object.assign(document.createElement("a"), { href: url, download: filename });
+  const url = URL.createObjectURL(
+    new Blob([content], { type: "text/markdown" }),
+  );
+  const a = Object.assign(document.createElement("a"), {
+    href: url,
+    download: filename,
+  });
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -528,7 +571,10 @@ function downloadMarkdown(filename, content) {
 // ─── AI Results ───────────────────────────────────────────────────────────────
 
 function escHtml(str) {
-  return str.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  return str.replace(
+    /[&<>]/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c],
+  );
 }
 
 const AI_EMPTY_HTML = `
@@ -561,13 +607,17 @@ function renderAiResults(aiResults) {
       minute: "2-digit",
     });
 
-    const block = document.getElementById("tpl-ai-result").content.cloneNode(true).querySelector(".ai-result-block");
+    const block = document
+      .getElementById("tpl-ai-result")
+      .content.cloneNode(true)
+      .querySelector(".ai-result-block");
     const badge = block.querySelector(".ai-result-badge");
     badge.textContent = label;
     badge.className = `ai-result-badge ${badgeCls}`;
     block.querySelector(".ai-result-time").textContent = timeStr;
     block.querySelector(".ai-result-body").textContent = r.text; // textContent = no XSS risk, no need for escHtml
-    block.querySelector(".ai-result-progress-fill").style.width = (r.progress || 0) + "%";
+    block.querySelector(".ai-result-progress-fill").style.width =
+      (r.progress || 0) + "%";
 
     block.querySelector(".ai-result-header").addEventListener("click", (e) => {
       if (e.target.classList.contains("ai-result-delete")) return;
@@ -576,7 +626,9 @@ function renderAiResults(aiResults) {
     });
 
     block.querySelector(".ai-copy-btn").addEventListener("click", () => {
-      navigator.clipboard.writeText(r.text).then(() => toast("Copied!", "success"));
+      navigator.clipboard
+        .writeText(r.text)
+        .then(() => toast("Copied!", "success"));
     });
 
     block.querySelector(".ai-export-btn").addEventListener("click", () => {
@@ -585,18 +637,23 @@ function renderAiResults(aiResults) {
       toast(`Exported ${lbl}`, "success");
     });
 
-    block.querySelector(".ai-result-delete").addEventListener("click", async (e) => {
-      e.stopPropagation();
-      if (!state.activeJobId) return;
-      const res = await fetch(`/api/jobs/${state.activeJobId}/ai/${r.originalIdx}`, {
-        method: "DELETE",
+    block
+      .querySelector(".ai-result-delete")
+      .addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (!state.activeJobId) return;
+        const res = await fetch(
+          `/api/jobs/${state.activeJobId}/ai/${r.originalIdx}`,
+          {
+            method: "DELETE",
+          },
+        );
+        if (res.ok) {
+          const data = await res.json();
+          renderAiResults(data.ai_results);
+          toast("Deleted", "success");
+        }
       });
-      if (res.ok) {
-        const data = await res.json();
-        renderAiResults(data.ai_results);
-        toast("Deleted", "success");
-      }
-    });
 
     dom.aiResultsPanel.appendChild(block);
   });
@@ -605,6 +662,8 @@ function renderAiResults(aiResults) {
 async function aiAction(mode) {
   const text = dom.editor.value;
   if (!text.trim()) return;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45000);
 
   const btn = mode === "summarize" ? dom.btnSummarize : dom.btnGrammar;
   const origText = btn.textContent;
@@ -616,16 +675,24 @@ async function aiAction(mode) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text, mode, job_id: state.activeJobId }),
+      signal: controller.signal,
     });
     const data = await res.json();
     if (data.error) {
       toast(data.hint || data.detail || data.error, "error");
     } else {
       await refreshAiPanel();
-      toast(`${mode === "summarize" ? "Summary" : "Grammar fix"} saved`, "success");
+      toast(
+        `${mode === "summarize" ? "Summary" : "Grammar fix"} saved`,
+        "success",
+      );
     }
   } catch (e) {
-    toast(`AI request failed: ${e.message}`, "error");
+    if (e.name === "AbortError") {
+      toast("AI request timed out (45s)", "error");
+    } else {
+      toast(`AI request failed: ${e.message}`, "error");
+    }
   } finally {
     btn.disabled = false;
     btn.textContent = origText;
@@ -653,31 +720,70 @@ dom.autoFixToggle.addEventListener("change", (e) => {
 
 async function triggerAutoFix(jobId, transcript) {
   if (!state.autoFixEnabled || !transcript) return;
+
   toast("Auto-fixing transcript…", "info");
-  setHeaderProgress("Auto-fixing", 50, { aiMode: true });
+
+  // Create temporary AI result block immediately
+  const tempResult = {
+    mode: "grammar",
+    text: "Processing…",
+    created_at: Math.floor(Date.now() / 1000),
+    progress: 5,
+    _temp: true,
+  };
+
+  renderAiResults([tempResult]);
+  setHeaderProgress("Auto-fixing", 10, { aiMode: true });
+
+  // Simulated smooth progress
+  let fakeProgress = 10;
+  const fakeInterval = setInterval(() => {
+    fakeProgress = Math.min(fakeProgress + 5, 85);
+    tempResult.progress = fakeProgress;
+    renderAiResults([tempResult]);
+  }, 400);
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 45000); // 45s timeout
+
     const res = await fetch("/api/ai", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: transcript, mode: "grammar", job_id: jobId }),
+      body: JSON.stringify({
+        text: transcript,
+        mode: "grammar",
+        job_id: jobId,
+      }),
+      signal: controller.signal,
     });
+
+    clearTimeout(timeout);
+    clearInterval(fakeInterval);
+
     const data = await res.json();
-    if (data.error) {
-      toast(data.hint || data.detail || data.error, "error");
-      setHeaderProgress("", 0, { hide: true });
-    } else {
-      setHeaderProgress("Complete", 100, { aiMode: true });
-      toast("Auto-fix complete!", "success");
-      await refreshAiPanel();
-      setTimeout(() => setHeaderProgress("", 0, { hide: true }), 2000);
-    }
+
+    if (data.error) throw new Error(data.error);
+
+    setHeaderProgress("Complete", 100, { aiMode: true });
+
+    await refreshAiPanel();
+    toast("Auto-fix complete!", "success");
+
+    setTimeout(() => setHeaderProgress("", 0, { hide: true }), 1500);
   } catch (e) {
-    toast(`Auto-fix failed: ${e.message}`, "error");
+    clearInterval(fakeInterval);
     setHeaderProgress("", 0, { hide: true });
+
+    if (e.name === "AbortError") {
+      toast("Auto-fix timed out after 45 seconds", "error");
+    } else {
+      toast(`Auto-fix failed: ${e.message}`, "error");
+    }
+
+    renderAiResults([]);
   }
 }
-
 // ─── Voice Edit ───────────────────────────────────────────────────────────────
 
 dom.btnEditVoice.addEventListener("click", () => {
@@ -691,7 +797,9 @@ async function startVoiceEdit() {
   }
 
   try {
-    state.voiceEditStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    state.voiceEditStream = await navigator.mediaDevices.getUserMedia({
+      audio: true,
+    });
   } catch (e) {
     toast(`Microphone access denied: ${e.message}`, "error");
     return;
@@ -701,7 +809,10 @@ async function startVoiceEdit() {
   const mimeType = getSupportedMimeType();
 
   try {
-    state.voiceEditRecorder = new MediaRecorder(state.voiceEditStream, mimeType ? { mimeType } : {});
+    state.voiceEditRecorder = new MediaRecorder(
+      state.voiceEditStream,
+      mimeType ? { mimeType } : {},
+    );
   } catch (e) {
     toast(`Recording not supported: ${e.message}`, "error");
     return;
@@ -724,7 +835,8 @@ async function startVoiceEdit() {
 }
 
 function stopVoiceEdit() {
-  if (state.voiceEditRecorder?.state !== "inactive") state.voiceEditRecorder.stop();
+  if (state.voiceEditRecorder?.state !== "inactive")
+    state.voiceEditRecorder.stop();
   state.voiceEditStream?.getTracks().forEach((t) => t.stop());
   state.voiceEditMode = false;
   dom.btnEditVoice.classList.remove("recording");
@@ -787,8 +899,12 @@ function openPersonalNamesModal() {
   dom.personalNamesModal.classList.add("active");
   fetch("/api/personal-names")
     .then((r) => r.json())
-    .then((data) => { dom.personalNamesInput.value = (data.names || []).join("\n"); })
-    .catch(() => { dom.personalNamesInput.value = ""; });
+    .then((data) => {
+      dom.personalNamesInput.value = (data.names || []).join("\n");
+    })
+    .catch(() => {
+      dom.personalNamesInput.value = "";
+    });
 }
 
 function closePersonalNamesModal() {
@@ -819,11 +935,21 @@ async function savePersonalNames() {
   }
 }
 
-document.getElementById("btn-personal-names").addEventListener("click", openPersonalNamesModal);
-document.getElementById("close-names-modal").addEventListener("click", closePersonalNamesModal);
-document.getElementById("cancel-names-modal").addEventListener("click", closePersonalNamesModal);
-document.getElementById("save-names-modal").addEventListener("click", savePersonalNames);
-dom.personalNamesModal.querySelector(".modal-backdrop").addEventListener("click", closePersonalNamesModal);
+document
+  .getElementById("btn-personal-names")
+  .addEventListener("click", openPersonalNamesModal);
+document
+  .getElementById("close-names-modal")
+  .addEventListener("click", closePersonalNamesModal);
+document
+  .getElementById("cancel-names-modal")
+  .addEventListener("click", closePersonalNamesModal);
+document
+  .getElementById("save-names-modal")
+  .addEventListener("click", savePersonalNames);
+dom.personalNamesModal
+  .querySelector(".modal-backdrop")
+  .addEventListener("click", closePersonalNamesModal);
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
