@@ -427,98 +427,98 @@ function watchJob(id) {
   if (!state.lastUpdateTime[id]) state.lastUpdateTime[id] = Date.now();
   if (state.activeJobId === id) startElapsedTimer(id);
 
-  // Try to use streaming endpoint for detailed progress
-  const useStream = true; // Enable streaming by default
+  const eventSource = new EventSource(`/api/transcribe/stream/${id}`);
 
-  if (useStream && state.activeJobId === id) {
-    // Use streaming endpoint for active job
-    const eventSource = new EventSource(`/api/transcribe/stream/${id}`);
-    
-    eventSource.onmessage = (event) => {
-      try {
-        const progress = JSON.parse(event.data);
+  eventSource.onmessage = (event) => {
+    try {
+      const progress = JSON.parse(event.data);
+      const el = state.jobElements.get(id);
+
+      // 1. Update Job List Item (Sidebar)
+      if (el) {
+        const bar = el.querySelector(".job-progress");
+        const statusEl = el.querySelector(".job-status");
         
-        // Update job element with progress
-        const el = state.jobElements.get(id);
-        if (el) {
-          const bar = el.querySelector(".job-progress");
-          bar.style.width = (progress.pct || 0) + "%";
-          
-          const statusEl = el.querySelector(".job-status");
-          statusEl.className = `job-status status-${progress.stage}`;
-          statusEl.textContent = progress.message || progress.stage;
+        // Only update DOM if values actually changed to prevent flicker
+        if (progress.pct !== undefined && state.lastProgress[id] !== progress.pct) {
+          bar.style.width = progress.pct + "%";
+          state.lastProgress[id] = progress.pct;
         }
 
-        // Update header and processing UI
+        const newStatus = progress.message || progress.stage;
+        if (statusEl.textContent !== newStatus) {
+          statusEl.className = `job-status status-${progress.stage}`;
+          statusEl.textContent = newStatus;
+        }
+      }
+
+      // 2. Update Active View (Header & Main Overlay)
+      if (state.activeJobId === id) {
         setHeaderProgress(progress.message || progress.stage, progress.pct || 0);
         
-        if (state.activeJobId === id) {
+        // If we have a live text segment, show it in the processing label
+        if (progress.text_segment) {
+          dom.processingLabel.textContent = `“${progress.text_segment}...”`;
+          dom.processingLabel.classList.add("live-text"); // Use CSS for a subtle fade/pulse
+        } else {
           updateProcessingUI(progress.stage, progress.pct || 0);
-          
-          // Show detailed progress info if available
-          if (progress.details) {
-            const details = progress.details;
-            if (details.tokens) {
-              dom.progressLastUpdate.textContent = `Tokens: ${details.tokens}`;
-            }
-          }
         }
 
-        state.lastProgress[id] = progress.pct || 0;
-        state.lastUpdateTime[id] = Date.now();
-
-        // Handle completion
-        if (progress.stage === "done" || progress.stage === "error") {
-          eventSource.close();
-          stopElapsedTimer();
-          setHeaderProgress("", 0, { hide: true });
-
-          if (progress.stage === "done") {
-            // Fetch final job status to get transcript
-            fetch(`/api/status/${id}`)
-              .then(r => r.json())
-              .then(job => {
-                toast("Transcription complete!", "success");
-                if (state.activeJobId === id || !state.activeJobId) {
-                  showTranscript(job.transcript, job.ai_results);
-                  selectJob(id);
-                }
-                if (state.autoFixEnabled && job.transcript)
-                  triggerAutoFix(id, job.transcript);
-              });
-          } else {
-            toast(`Job failed: ${progress.message}`, "error");
-            if (state.activeJobId === id)
-              dom.processingOverlay.classList.remove("active");
-          }
-          
-          delete state.jobStartTime[id];
-          delete state.lastUpdateTime[id];
-          delete state.lastProgress[id];
+        if (progress.details?.tokens) {
+          dom.progressLastUpdate.textContent = `Tokens: ${progress.details.tokens}`;
         }
-      } catch (e) {
-        console.error("Error parsing progress:", e);
       }
-    };
 
-    eventSource.onerror = () => {
-      eventSource.close();
-      // Fall back to polling
-      console.log("Stream failed, falling back to polling");
-      watchJobPoll(id);
-    };
-
-    // Also set up a timeout to fall back to polling if stream takes too long without progress
-    setTimeout(() => {
-      if (state.lastProgress[id] === undefined || state.lastProgress[id] < 5) {
+      // 3. Handle Lifecycle States
+      if (progress.stage === "done" || progress.stage === "error") {
         eventSource.close();
-        watchJobPoll(id);
+        stopElapsedTimer();
+        setHeaderProgress("", 0, { hide: true });
+
+        if (progress.stage === "done") {
+          fetch(`/api/status/${id}`)
+            .then(r => r.json())
+            .then(job => {
+              toast("Transcription complete!", "success");
+              if (state.activeJobId === id || !state.activeJobId) {
+                showTranscript(job.transcript, job.ai_results);
+                selectJob(id);
+              }
+              if (state.autoFixEnabled && job.transcript) {
+                triggerAutoFix(id, job.transcript);
+              }
+            });
+        } else {
+          toast(`Job failed: ${progress.message}`, "error");
+          if (state.activeJobId === id) {
+            dom.processingOverlay.classList.remove("active");
+          }
+        }
+
+        // Cleanup state
+        delete state.jobStartTime[id];
+        delete state.lastUpdateTime[id];
+        delete state.lastProgress[id];
       }
-    }, 5000);
-  } else {
-    // Use polling for non-active jobs
+    } catch (e) {
+      console.error("Error parsing progress payload:", e);
+    }
+  };
+
+  eventSource.onerror = () => {
+    eventSource.close();
+    console.warn("SSE Stream failed, falling back to polling for job:", id);
     watchJobPoll(id);
-  }
+  };
+
+  // Safety timeout: If no progress after 5s, fallback to polling
+  setTimeout(() => {
+    if (state.lastProgress[id] === undefined) {
+      console.log("Stream non-responsive, switching to poll.");
+      eventSource.close();
+      watchJobPoll(id);
+    }
+  }, 5000);
 }
 
 function watchJobPoll(id) {

@@ -1196,3 +1196,13 @@ canvas#waveform {
   padding: 1rem 1.25rem;
   border-top: 1px solid var(--border);
 }
+
+#processing-label {
+  transition: opacity 0.2s ease;
+}
+
+.live-text {
+  color: var(--accent-gold); /* or whatever your brand color is */
+  font-style: italic;
+  font-size: 0.9em;
+}

@@ -13,21 +13,17 @@ class TranscriptionService:
         self.config = config
 
     def convert_to_wav(self, src: Path, dst: Path):
-        """Convert audio file to WAV format."""
+        """Convert audio file to WAV format and strip silences."""
         result = subprocess.run(
             [
                 "ffmpeg",
                 "-y",
-                "-i",
-                str(src),
-                "-ar",
-                "16000",
-                "-ac",
-                "1",
-                "-sample_fmt",
-                "s16",
-                "-f",
-                "wav",
+                "-i", str(src),
+                "-af", "silenceremove=1:0:-50dB", # Skip silence at start and internal pauses
+                "-ar", "16000",
+                "-ac", "1",
+                "-sample_fmt", "s16",
+                "-f", "wav",
                 str(dst),
             ],
             capture_output=True,
@@ -37,97 +33,83 @@ class TranscriptionService:
             raise RuntimeError(f"ffmpeg failed:\n{result.stderr[-800:]}")
 
     def transcribe(
-        self, wav: Path, job_id: str, progress_callback: Callable[[int], None] = None
+        self, wav: Path, job_id: str, progress_callback: Callable[[dict], None] = None
     ):
-        """
-        Transcribe audio file using Whisper.
-
-        Args:
-            wav: Path to WAV file
-            job_id: Job identifier for output naming
-            progress_callback: Optional callback for progress updates (0-100)
-                             Can also receive dict with detailed progress info
-
-        Returns:
-            Transcribed text
-        """
+        """Transcribe audio file using Whisper with flicker-reduction logic."""
         if not self.config.WHISPER_BIN:
             raise RuntimeError("whisper-cli binary not found — run ./setup.sh")
         if not self.config.WHISPER_MODEL:
             raise RuntimeError("No Whisper model found — run ./setup.sh")
 
+        # Define output path and threading (The missing lines!)
         out_stem = str(self.config.OUTPUT_DIR / job_id)
         threads = str(max(4, os.cpu_count() or 4))
 
         cmd = [
             self.config.WHISPER_BIN,
-            "--model",
-            self.config.WHISPER_MODEL,
-            "--file",
-            str(wav),
+            "--model", self.config.WHISPER_MODEL,
+            "--file", str(wav),
             "--output-txt",
-            "--output-file",
-            out_stem,
+            "--output-file", out_stem,
             "--print-progress",
-            "--threads",
-            threads,
+            "--threads", threads,
         ]
 
-        stderr_lines = []
+        # Capture STDOUT/STDERR combined to catch both progress and text segments
         proc = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
         )
 
-        # Track detailed progress info
-        progress_info = {
-            "stage": "transcribing",
-            "pct": 0,
-            "prompt": "",
-            "tokens": 0,
-        }
+        last_pct = -1
+        for line in proc.stdout:
+            line = line.strip()
+            if not line:
+                continue
 
-        for line in proc.stderr:
-            stderr_lines.append(line)
-            print(f"[whisper] {line}", end="", flush=True)
+            print(f"[whisper] {line}") # Keep server logs active
 
-            # Parse detailed progress from whisper output
-            line_lower = line.lower()
-
-            # Extract overall progress percentage
-            if "progress" in line_lower and "%" in line:
+            # 1. Parse Progress (flicker-free)
+            if "progress =" in line:
                 try:
-                    # Try various formats: "progress: 50%", "50.5%"
-                    pct_str = line.split("%")[0]
-                    if "=" in pct_str:
-                        pct = int(pct_str.split("=")[-1].strip())
-                    else:
-                        pct = int(float(pct_str.split()[-1]))
-                    progress_info["pct"] = pct
-
-                    if progress_callback:
-                        # Send progress info
-                        progress_callback(30 + int(pct * 0.65))
+                    pct_str = line.split("=")[-1].replace("%", "").strip()
+                    pct = int(float(pct_str))
+                    # Only trigger callback if percentage actually moved up
+                    if pct > last_pct:
+                        last_pct = pct
+                        if progress_callback:
+                            progress_callback({
+                                "stage": "transcribing",
+                                "pct": 30 + int(pct * 0.65),
+                                "message": f"Transcribing... {pct}%"
+                            })
                 except (ValueError, IndexError):
                     pass
 
-            # Extract prompt/text info if available
-            if "prompt:" in line_lower or "generation" in line_lower:
-                # Whisper sometimes outputs partial text info
-                if progress_callback:
-                    progress_callback(int(30 + progress_info["pct"] * 0.65))
+            # 2. Parse Live Text Segments (the "Smooth Printing" fix)
+            elif "-->" in line and "]" in line:
+                try:
+                    text_part = line.split("]")[-1].strip()
+                    if text_part and progress_callback:
+                        progress_callback({
+                            "stage": "transcribing",
+                            "pct": 30 + int(max(0, last_pct) * 0.65),
+                            "text_segment": text_part
+                        })
+                except Exception:
+                    pass
 
         proc.wait()
-        full_stderr = "".join(stderr_lines)
-
+        
         if proc.returncode != 0:
-            raise RuntimeError(f"whisper-cli exited {proc.returncode}:\n{full_stderr}")
+            raise RuntimeError(f"whisper-cli exited with code {proc.returncode}")
 
-        txt = Path(out_stem + ".txt")
-        if txt.exists():
-            text = txt.read_text().strip()
-            txt.unlink(missing_ok=True)
-            # Join sentences that were split on newlines
-            text = " ".join(line.strip() for line in text.split("\n") if line.strip())
+        # Cleanup and return final text
+        txt_path = Path(out_stem + ".txt")
+        if txt_path.exists():
+            text = txt_path.read_text().strip()
+            txt_path.unlink(missing_ok=True)
+            # Clean up extra newlines for a clean paragraph
+            text = " ".join(l.strip() for l in text.split("\n") if l.strip())
             return text
 
         raise RuntimeError("whisper-cli produced no output file")

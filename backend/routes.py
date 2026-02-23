@@ -438,7 +438,6 @@ def register_routes(app: Flask, config, job_store, transcription_service, ai_ser
             # Mark as converting immediately
             job_store.update(job_id, status="converting", progress=5)
             
-            # Initialize progress tracking
             with _progress_lock:
                 _transcription_progress[job_id] = {
                     "stage": "converting",
@@ -447,87 +446,90 @@ def register_routes(app: Flask, config, job_store, transcription_service, ai_ser
                     "start_time": time.time(),
                 }
 
-            def on_progress(pct):
-                # Once we pass 30%, we are transcribing
-                status = "transcribing" if pct >= 30 else "converting"
-                job_store.update(job_id, progress=pct, status=status)
-                
-                # Store detailed progress
-                progress_data = {
-                    "stage": status,
-                    "pct": pct,
-                    "message": f"{'Converting' if status == 'converting' else 'Transcribing'}: {pct}%",
-                    "start_time": _transcription_progress.get(job_id, {}).get("start_time", time.time()),
-                }
-                
-                with _progress_lock:
-                    _transcription_progress[job_id] = progress_data
+            def on_progress(data):
+                """
+                UPGRADED: Handles both int (old style) and dict (new style).
+                Fixes the TypeError: '>=' not supported between instances of 'dict' and 'int'
+                """
+                if isinstance(data, dict):
+                    # Data coming from the upgraded transcription_service
+                    pct = data.get("pct", 0)
+                    stage = data.get("stage", "transcribing")
+                    msg = data.get("message", f"Transcribing... {pct}%")
+                    text_segment = data.get("text_segment")
+                else:
+                    # Fallback for simple integer progress (e.g. from conversion)
+                    pct = data
+                    stage = "transcribing" if pct >= 30 else "converting"
+                    msg = f"{'Transcribing' if stage == 'transcribing' else 'Converting'}... {pct}%"
+                    text_segment = None
 
+                # Update the database/store
+                job_store.update(job_id, progress=pct, status=stage)
+                
+                # Update the shared progress object for SSE
+                with _progress_lock:
+                    prev_start = _transcription_progress.get(job_id, {}).get("start_time", time.time())
+                    progress_payload = {
+                        "stage": stage,
+                        "pct": pct,
+                        "message": msg,
+                        "start_time": prev_start
+                    }
+                    if text_segment:
+                        progress_payload["text_segment"] = text_segment
+                    
+                    _transcription_progress[job_id] = progress_payload
+
+            # Process the job
             vstatus, result = transcription_service.process(src, job_id, on_progress)
 
             if vstatus == "done":
                 job_store.update(job_id, status="done", progress=100, transcript=result)
                 with _progress_lock:
-                    _transcription_progress[job_id] = {
-                        "stage": "done",
-                        "pct": 100,
-                        "message": "Transcription complete!",
-                        "start_time": _transcription_progress.get(job_id, {}).get("start_time", time.time()),
-                    }
+                    _transcription_progress[job_id]["stage"] = "done"
+                    _transcription_progress[job_id]["pct"] = 100
             else:
                 job_store.update(job_id, status="error", error=result)
                 with _progress_lock:
-                    _transcription_progress[job_id] = {
-                        "stage": "error",
-                        "pct": 0,
-                        "message": f"Error: {result}",
-                        "start_time": _transcription_progress.get(job_id, {}).get("start_time", time.time()),
-                    }
+                    _transcription_progress[job_id]["stage"] = "error"
+                    _transcription_progress[job_id]["message"] = f"Error: {result}"
 
         threading.Thread(target=run, daemon=True).start()
 
     @app.route("/api/transcribe/stream/<job_id>")
     def transcribe_stream(job_id):
         """Streaming endpoint for transcription progress."""
-        import queue
-        import uuid
-        
-        # Create a queue for this stream
-        stream_id = str(uuid.uuid4())
-        progress_queue = queue.Queue()
-        
-        # Register this stream
-        if not hasattr(_start_job, 'streams'):
-            _start_job.streams = {}
-        _start_job.streams[stream_id] = progress_queue
-        
         def generate():
+            last_pct = -1
+            last_text = ""
+            
             try:
-                last_pct = -1
                 while True:
                     with _progress_lock:
                         progress = _transcription_progress.get(job_id)
                     
                     if progress:
-                        pct = progress.get("pct", 0)
-                        # Only send update if progress changed
-                        if pct != last_pct:
-                            last_pct = pct
+                        curr_pct = progress.get("pct", 0)
+                        curr_text = progress.get("text_segment", "")
+                        curr_stage = progress.get("stage")
+
+                        # UPGRADED: Send update if PCT changed OR if there is new live text
+                        if curr_pct != last_pct or curr_text != last_text:
+                            last_pct = curr_pct
+                            last_text = curr_text
                             yield f"data: {json.dumps(progress)}\n\n"
                             
-                            # Stop when done or error
-                            if progress.get("stage") in ("done", "error"):
-                                break
+                        if curr_stage in ("done", "error"):
+                            break
                     
-                    # Check if job still exists
+                    # Safety check: if job disappears from store
                     job = job_store.get(job_id)
-                    if not job or job.get("status") in ("done", "error"):
+                    if not job:
                         break
-                    
-                    time.sleep(0.5)
-            finally:
-                # Cleanup
-                if hasattr(_start_job, 'streams'):
-                    _start_job.streams.pop(stream_id, None)
+                        
+                    time.sleep(0.2) # Faster heartbeat for "live" feel
+            except GeneratorExit:
+                pass # Client disconnected
         
         return Response(generate(), mimetype="text/event-stream")
