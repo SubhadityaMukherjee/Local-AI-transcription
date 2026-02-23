@@ -772,6 +772,7 @@ canvas#waveform {
 }
 
 .progress-bar-fill {
+  position: relative;
   height: 100%;
   background: var(--accent);
   border-radius: 2px;
@@ -856,7 +857,7 @@ canvas#waveform {
 .ai-result-progress-fill,
 #progress-bar-fill,
 #header-progress-fill {
-  position: absolute; /* VERY IMPORTANT */
+  position: relative; /* Changed from absolute to relative */
   overflow: hidden; /* contains shimmer */
 }
 

@@ -5,6 +5,8 @@ vendor/whisper.cpp/models/*.mlmodelc
 store/
 outputs/
 recordings/
+uploads/
+*.m4a
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

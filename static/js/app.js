@@ -745,7 +745,7 @@ async function triggerAutoFix(jobId, transcript) {
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 45000); // 45s timeout
+    const timeout = setTimeout(() => controller.abort(), 300000); // 5 minute timeout
 
     const res = await fetch("/api/ai", {
       method: "POST",
@@ -767,7 +767,11 @@ async function triggerAutoFix(jobId, transcript) {
 
     setHeaderProgress("Complete", 100, { aiMode: true });
 
-    await refreshAiPanel();
+    // Only refresh AI panel once at the end, not during progress updates
+    const res2 = await fetch(`/api/status/${jobId}`);
+    const job = await res2.json();
+    renderAiResults(job.ai_results || []);
+    
     toast("Auto-fix complete!", "success");
 
     setTimeout(() => setHeaderProgress("", 0, { hide: true }), 1500);
@@ -776,7 +780,7 @@ async function triggerAutoFix(jobId, transcript) {
     setHeaderProgress("", 0, { hide: true });
 
     if (e.name === "AbortError") {
-      toast("Auto-fix timed out after 45 seconds", "error");
+      toast("Auto-fix timed out after 5 minutes", "error");
     } else {
       toast(`Auto-fix failed: ${e.message}`, "error");
     }
