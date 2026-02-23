@@ -1,6 +1,10 @@
+# Personal names for spelling correction
+# One name per line
 Hrishita
 Subhaditya
 Mukherjee
 Mayukha
 Pieter
 Joaquin
+TU/e
+ALFIE

@@ -46,6 +46,7 @@ class TranscriptionService:
             wav: Path to WAV file
             job_id: Job identifier for output naming
             progress_callback: Optional callback for progress updates (0-100)
+                             Can also receive dict with detailed progress info
 
         Returns:
             Transcribed text
@@ -77,16 +78,43 @@ class TranscriptionService:
             cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
         )
 
+        # Track detailed progress info
+        progress_info = {
+            "stage": "transcribing",
+            "pct": 0,
+            "prompt": "",
+            "tokens": 0,
+        }
+
         for line in proc.stderr:
             stderr_lines.append(line)
             print(f"[whisper] {line}", end="", flush=True)
 
-            if progress_callback and "progress" in line.lower() and "%" in line:
+            # Parse detailed progress from whisper output
+            line_lower = line.lower()
+
+            # Extract overall progress percentage
+            if "progress" in line_lower and "%" in line:
                 try:
-                    pct = int(line.split("%")[0].split("=")[-1].strip())
-                    progress_callback(30 + int(pct * 0.65))
-                except ValueError:
+                    # Try various formats: "progress: 50%", "50.5%"
+                    pct_str = line.split("%")[0]
+                    if "=" in pct_str:
+                        pct = int(pct_str.split("=")[-1].strip())
+                    else:
+                        pct = int(float(pct_str.split()[-1]))
+                    progress_info["pct"] = pct
+
+                    if progress_callback:
+                        # Send progress info
+                        progress_callback(30 + int(pct * 0.65))
+                except (ValueError, IndexError):
                     pass
+
+            # Extract prompt/text info if available
+            if "prompt:" in line_lower or "generation" in line_lower:
+                # Whisper sometimes outputs partial text info
+                if progress_callback:
+                    progress_callback(int(30 + progress_info["pct"] * 0.65))
 
         proc.wait()
         full_stderr = "".join(stderr_lines)

@@ -1,5 +1,6 @@
 """API routes for Whisper Studio."""
 
+import json
 import os
 import shutil
 import subprocess
@@ -10,7 +11,7 @@ import uuid
 from pathlib import Path
 from urllib import error as urlerr
 
-from flask import Flask, jsonify, render_template, request, send_file
+from flask import Flask, jsonify, render_template, request, send_file, Response
 
 
 def register_routes(app: Flask, config, job_store, transcription_service, ai_service):
@@ -260,6 +261,100 @@ def register_routes(app: Flask, config, job_store, transcription_service, ai_ser
             print(f"[ai] Unexpected error: {traceback.format_exc()}")
             return jsonify({"error": f"AI request failed: {e}"}), 503
 
+    @app.route("/api/ai/stream", methods=["POST"])
+    def ai_action_stream():
+        """Streaming AI endpoint for real-time response display."""
+        audio_file = request.files.get("audio")
+
+        if audio_file:
+            text = (request.form.get("text") or "").strip()
+            mode = request.form.get("mode", "edit")
+            job_id = request.form.get("job_id")
+
+            # Preserve the actual file extension so ffmpeg/whisper can decode it
+            mime = audio_file.mimetype or audio_file.content_type or ""
+            suffix = ".mp4" if "mp4" in mime else ".ogg" if "ogg" in mime else ".webm"
+            audio_path = (
+                Path(tempfile.gettempdir()) / f"voice_edit_{uuid.uuid4()}{suffix}"
+            )
+            audio_file.save(str(audio_path))
+
+            try:
+                job_id_temp = f"voice_edit_{uuid.uuid4()}"
+                vstatus, transcript_result = transcription_service.process(
+                    audio_path, job_id_temp, lambda p: None
+                )
+                if vstatus != "done":
+                    return (
+                        jsonify(
+                            {
+                                "error": f"Failed to transcribe audio: {transcript_result}"
+                            }
+                        ),
+                        500,
+                    )
+
+                full_text = (
+                    f"Original text:\n{text}\n\nVoice command:\n{transcript_result}"
+                )
+                personal_names = None
+            except Exception as e:
+                return jsonify({"error": f"Failed to process audio: {e}"}), 500
+        else:
+            data = request.get_json(force=True)
+            full_text = (data.get("text") or "").strip()
+            mode = data.get("mode", "summarize")
+            job_id = data.get("job_id")
+            personal_names = data.get("personal_names")
+
+        if not full_text:
+            return jsonify({"error": "No text"}), 400
+        if not ai_service.is_configured():
+            return (
+                jsonify(
+                    {
+                        "error": "AI endpoint not configured",
+                        "hint": ai_service.get_config_hint(),
+                    }
+                ),
+                503,
+            )
+
+        def generate():
+            """Generator that yields streaming AI response as SSE."""
+            full_reply = ""
+            try:
+                for chunk in ai_service.process_stream(
+                    full_text, mode, names=personal_names
+                ):
+                    full_reply += chunk
+                    # Yield as SSE format
+                    yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+
+                # Save result to job store after completion
+                if job_id:
+                    job_store.add_ai_result(job_id, mode, full_reply)
+
+                # Send completion signal
+                yield f"data: {json.dumps({'done': True, 'text': full_reply})}\n\n"
+
+            except urlerr.HTTPError as e:
+                body = e.read().decode(errors="replace")
+                print(f"[ai stream] HTTP {e.code}: {body}")
+                yield f"data: {json.dumps({'error': f'Ollama returned HTTP {e.code}', 'detail': body})}\n\n"
+
+            except urlerr.URLError as e:
+                print(f"[ai stream] Cannot reach Ollama: {e.reason}")
+                yield f"data: {json.dumps({'error': 'Cannot reach Ollama', 'detail': str(e.reason)})}\n\n"
+
+            except Exception as e:
+                import traceback
+
+                print(f"[ai stream] Unexpected error: {traceback.format_exc()}")
+                yield f"data: {json.dumps({'error': f'AI request failed: {e}'})}\n\n"
+
+        return Response(generate(), mimetype="text/event-stream")
+
     @app.route("/api/personal-names", methods=["GET"])
     def get_personal_names():
         return jsonify({"names": config.get_personal_names()})
@@ -332,23 +427,107 @@ def register_routes(app: Flask, config, job_store, transcription_service, ai_ser
         cleared = job_store.clear_completed()
         return jsonify({"cleared": cleared})
 
+    # Store for transcription progress that can be accessed by streaming endpoint
+    _transcription_progress: dict = {}
+    _progress_lock = threading.Lock()
+
     def _start_job(job_id: str, src: Path):
         """Start processing job in background thread."""
 
         def run():
             # Mark as converting immediately
             job_store.update(job_id, status="converting", progress=5)
+            
+            # Initialize progress tracking
+            with _progress_lock:
+                _transcription_progress[job_id] = {
+                    "stage": "converting",
+                    "pct": 5,
+                    "message": "Converting audio file...",
+                    "start_time": time.time(),
+                }
 
             def on_progress(pct):
                 # Once we pass 30%, we are transcribing
                 status = "transcribing" if pct >= 30 else "converting"
                 job_store.update(job_id, progress=pct, status=status)
+                
+                # Store detailed progress
+                progress_data = {
+                    "stage": status,
+                    "pct": pct,
+                    "message": f"{'Converting' if status == 'converting' else 'Transcribing'}: {pct}%",
+                    "start_time": _transcription_progress.get(job_id, {}).get("start_time", time.time()),
+                }
+                
+                with _progress_lock:
+                    _transcription_progress[job_id] = progress_data
 
             vstatus, result = transcription_service.process(src, job_id, on_progress)
 
             if vstatus == "done":
                 job_store.update(job_id, status="done", progress=100, transcript=result)
+                with _progress_lock:
+                    _transcription_progress[job_id] = {
+                        "stage": "done",
+                        "pct": 100,
+                        "message": "Transcription complete!",
+                        "start_time": _transcription_progress.get(job_id, {}).get("start_time", time.time()),
+                    }
             else:
                 job_store.update(job_id, status="error", error=result)
+                with _progress_lock:
+                    _transcription_progress[job_id] = {
+                        "stage": "error",
+                        "pct": 0,
+                        "message": f"Error: {result}",
+                        "start_time": _transcription_progress.get(job_id, {}).get("start_time", time.time()),
+                    }
 
         threading.Thread(target=run, daemon=True).start()
+
+    @app.route("/api/transcribe/stream/<job_id>")
+    def transcribe_stream(job_id):
+        """Streaming endpoint for transcription progress."""
+        import queue
+        import uuid
+        
+        # Create a queue for this stream
+        stream_id = str(uuid.uuid4())
+        progress_queue = queue.Queue()
+        
+        # Register this stream
+        if not hasattr(_start_job, 'streams'):
+            _start_job.streams = {}
+        _start_job.streams[stream_id] = progress_queue
+        
+        def generate():
+            try:
+                last_pct = -1
+                while True:
+                    with _progress_lock:
+                        progress = _transcription_progress.get(job_id)
+                    
+                    if progress:
+                        pct = progress.get("pct", 0)
+                        # Only send update if progress changed
+                        if pct != last_pct:
+                            last_pct = pct
+                            yield f"data: {json.dumps(progress)}\n\n"
+                            
+                            # Stop when done or error
+                            if progress.get("stage") in ("done", "error"):
+                                break
+                    
+                    # Check if job still exists
+                    job = job_store.get(job_id)
+                    if not job or job.get("status") in ("done", "error"):
+                        break
+                    
+                    time.sleep(0.5)
+            finally:
+                # Cleanup
+                if hasattr(_start_job, 'streams'):
+                    _start_job.streams.pop(stream_id, None)
+        
+        return Response(generate(), mimetype="text/event-stream")

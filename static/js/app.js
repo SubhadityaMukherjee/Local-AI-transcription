@@ -427,6 +427,102 @@ function watchJob(id) {
   if (!state.lastUpdateTime[id]) state.lastUpdateTime[id] = Date.now();
   if (state.activeJobId === id) startElapsedTimer(id);
 
+  // Try to use streaming endpoint for detailed progress
+  const useStream = true; // Enable streaming by default
+
+  if (useStream && state.activeJobId === id) {
+    // Use streaming endpoint for active job
+    const eventSource = new EventSource(`/api/transcribe/stream/${id}`);
+    
+    eventSource.onmessage = (event) => {
+      try {
+        const progress = JSON.parse(event.data);
+        
+        // Update job element with progress
+        const el = state.jobElements.get(id);
+        if (el) {
+          const bar = el.querySelector(".job-progress");
+          bar.style.width = (progress.pct || 0) + "%";
+          
+          const statusEl = el.querySelector(".job-status");
+          statusEl.className = `job-status status-${progress.stage}`;
+          statusEl.textContent = progress.message || progress.stage;
+        }
+
+        // Update header and processing UI
+        setHeaderProgress(progress.message || progress.stage, progress.pct || 0);
+        
+        if (state.activeJobId === id) {
+          updateProcessingUI(progress.stage, progress.pct || 0);
+          
+          // Show detailed progress info if available
+          if (progress.details) {
+            const details = progress.details;
+            if (details.tokens) {
+              dom.progressLastUpdate.textContent = `Tokens: ${details.tokens}`;
+            }
+          }
+        }
+
+        state.lastProgress[id] = progress.pct || 0;
+        state.lastUpdateTime[id] = Date.now();
+
+        // Handle completion
+        if (progress.stage === "done" || progress.stage === "error") {
+          eventSource.close();
+          stopElapsedTimer();
+          setHeaderProgress("", 0, { hide: true });
+
+          if (progress.stage === "done") {
+            // Fetch final job status to get transcript
+            fetch(`/api/status/${id}`)
+              .then(r => r.json())
+              .then(job => {
+                toast("Transcription complete!", "success");
+                if (state.activeJobId === id || !state.activeJobId) {
+                  showTranscript(job.transcript, job.ai_results);
+                  selectJob(id);
+                }
+                if (state.autoFixEnabled && job.transcript)
+                  triggerAutoFix(id, job.transcript);
+              });
+          } else {
+            toast(`Job failed: ${progress.message}`, "error");
+            if (state.activeJobId === id)
+              dom.processingOverlay.classList.remove("active");
+          }
+          
+          delete state.jobStartTime[id];
+          delete state.lastUpdateTime[id];
+          delete state.lastProgress[id];
+        }
+      } catch (e) {
+        console.error("Error parsing progress:", e);
+      }
+    };
+
+    eventSource.onerror = () => {
+      eventSource.close();
+      // Fall back to polling
+      console.log("Stream failed, falling back to polling");
+      watchJobPoll(id);
+    };
+
+    // Also set up a timeout to fall back to polling if stream takes too long without progress
+    setTimeout(() => {
+      if (state.lastProgress[id] === undefined || state.lastProgress[id] < 5) {
+        eventSource.close();
+        watchJobPoll(id);
+      }
+    }, 5000);
+  } else {
+    // Use polling for non-active jobs
+    watchJobPoll(id);
+  }
+}
+
+function watchJobPoll(id) {
+  // Fallback polling function
   const poll = setInterval(async () => {
     const res = await fetch(`/api/status/${id}`);
     const job = await res.json();
@@ -662,36 +758,105 @@ function renderAiResults(aiResults) {
 async function aiAction(mode) {
   const text = dom.editor.value;
   if (!text.trim()) return;
-  const controller = new AbortController();
 
   const btn = mode === "summarize" ? dom.btnSummarize : dom.btnGrammar;
   const origText = btn.textContent;
   btn.disabled = true;
   btn.textContent = "…";
 
+  // Create a temporary AI result block for streaming display
+  const tempResult = {
+    mode: mode,
+    text: "",
+    created_at: Math.floor(Date.now() / 1000),
+    progress: 0,
+    _temp: true,
+  };
+
+  // Show the streaming UI immediately
+  renderAiResults([tempResult]);
+  setHeaderProgress(
+    mode === "summarize" ? "Summarizing" : "Processing",
+    10,
+    { aiMode: true },
+  );
+
   try {
-    const res = await fetch("/api/ai", {
+    const response = await fetch("/api/ai/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text, mode, job_id: state.activeJobId }),
-      signal: controller.signal,
     });
-    const data = await res.json();
-    if (data.error) {
-      toast(data.hint || data.detail || data.error, "error");
-    } else {
-      await refreshAiPanel();
-      toast(
-        `${mode === "summarize" ? "Summary" : "Grammar fix"} saved`,
-        "success",
-      );
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || errorData.detail || "Request failed");
     }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let fullText = "";
+    let fakeProgress = 10;
+
+    // Simulate progress while streaming
+    const fakeInterval = setInterval(() => {
+      fakeProgress = Math.min(fakeProgress + 3, 90);
+      tempResult.progress = fakeProgress;
+      renderAiResults([tempResult]);
+    }, 300);
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split("\n");
+
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          try {
+            const data = JSON.parse(line.slice(6));
+
+            if (data.error) {
+              clearInterval(fakeInterval);
+              throw new Error(data.error);
+            }
+
+            if (data.chunk) {
+              fullText += data.chunk;
+              tempResult.text = fullText;
+              renderAiResults([tempResult]);
+            }
+
+            if (data.done) {
+              clearInterval(fakeInterval);
+              fullText = data.text || fullText;
+              tempResult.text = fullText;
+              tempResult.progress = 100;
+              setHeaderProgress("Complete", 100, { aiMode: true });
+            }
+          } catch (e) {
+            // Skip invalid JSON
+            continue;
+          }
+        }
+      }
+    }
+
+    clearInterval(fakeInterval);
+
+    // Refresh the AI panel with actual saved results
+    await refreshAiPanel();
+    toast(
+      `${mode === "summarize" ? "Summary" : "Grammar fix"} saved`,
+      "success",
+    );
+
+    setTimeout(() => setHeaderProgress("", 0, { hide: true }), 1500);
   } catch (e) {
-    if (e.name === "AbortError") {
-      toast("AI request timed out", "error");
-    } else {
-      toast(`AI request failed: ${e.message}`, "error");
-    }
+    setHeaderProgress("", 0, { hide: true });
+    toast(e.message || `AI request failed: ${e}`, "error");
+    renderAiResults([]); // Clear the temp result on error
   } finally {
     btn.disabled = false;
     btn.textContent = origText;
@@ -725,28 +890,17 @@ async function triggerAutoFix(jobId, transcript) {
   // Create temporary AI result block immediately
   const tempResult = {
     mode: "grammar",
-    text: "Processing…",
+    text: "",
     created_at: Math.floor(Date.now() / 1000),
-    progress: 5,
+    progress: 0,
     _temp: true,
   };
 
   renderAiResults([tempResult]);
   setHeaderProgress("Auto-fixing", 10, { aiMode: true });
 
-  // Simulated smooth progress
-  let fakeProgress = 10;
-  const fakeInterval = setInterval(() => {
-    fakeProgress = Math.min(fakeProgress + 5, 85);
-    tempResult.progress = fakeProgress;
-    renderAiResults([tempResult]);
-  }, 400);
-
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 300000); // 5 minute timeout
-
-    const res = await fetch("/api/ai", {
+    const response = await fetch("/api/ai/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -754,28 +908,74 @@ async function triggerAutoFix(jobId, transcript) {
         mode: "grammar",
         job_id: jobId,
       }),
-      signal: controller.signal,
     });
 
-    clearTimeout(timeout);
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || errorData.detail || "Request failed");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let fullText = "";
+    let fakeProgress = 10;
+
+    // Simulate progress while streaming
+    const fakeInterval = setInterval(() => {
+      fakeProgress = Math.min(fakeProgress + 3, 90);
+      tempResult.progress = fakeProgress;
+      renderAiResults([tempResult]);
+    }, 300);
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split("\n");
+
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          try {
+            const data = JSON.parse(line.slice(6));
+
+            if (data.error) {
+              clearInterval(fakeInterval);
+              throw new Error(data.error);
+            }
+
+            if (data.chunk) {
+              fullText += data.chunk;
+              tempResult.text = fullText;
+              renderAiResults([tempResult]);
+            }
+
+            if (data.done) {
+              clearInterval(fakeInterval);
+              fullText = data.text || fullText;
+              tempResult.text = fullText;
+              tempResult.progress = 100;
+              setHeaderProgress("Complete", 100, { aiMode: true });
+            }
+          } catch (e) {
+            // Skip invalid JSON
+            continue;
+          }
+        }
+      }
+    }
+
     clearInterval(fakeInterval);
 
-    const data = await res.json();
-
-    if (data.error) throw new Error(data.error);
-
-    setHeaderProgress("Complete", 100, { aiMode: true });
-
-    // Only refresh AI panel once at the end, not during progress updates
+    // Refresh AI panel with actual saved results
     const res2 = await fetch(`/api/status/${jobId}`);
     const job = await res2.json();
     renderAiResults(job.ai_results || []);
-    
+
     toast("Auto-fix complete!", "success");
 
     setTimeout(() => setHeaderProgress("", 0, { hide: true }), 1500);
   } catch (e) {
-    clearInterval(fakeInterval);
     setHeaderProgress("", 0, { hide: true });
 
     if (e.name === "AbortError") {

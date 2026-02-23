@@ -5,6 +5,7 @@ import tomllib as tomli
 import urllib.error as urlerr
 import urllib.request as urlreq
 from pathlib import Path
+from typing import Generator, Optional
 
 
 class AIService:
@@ -109,6 +110,75 @@ class AIService:
             result = json.loads(resp.read())
 
         return result["choices"][0]["message"]["content"]
+
+    def process_stream(
+        self, text: str, mode: str = "summarize", names: list = None
+    ) -> Generator[str, None, None]:
+        """
+        Process text with AI using streaming.
+
+        Args:
+            text: Input text
+            mode: Processing mode ('summarize' or 'grammar')
+            names: Optional list of personal names for spelling correction
+
+        Yields:
+            Chunks of AI response text
+        """
+        if not self.is_configured():
+            raise ValueError("AI endpoint not configured")
+
+        # Use provided names or get from config
+        if names is None:
+            names = self.config.get_personal_names()
+
+        prompt = self.format_prompt(mode, text, names)
+        payload = json.dumps(
+            {
+                "model": self.config.AI_MODEL,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": True,
+            }
+        ).encode()
+
+        url = f"{self.config.AI_BASE_URL.rstrip('/')}/chat/completions"
+        req = urlreq.Request(
+            url,
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.config.AI_API_KEY}",
+            },
+            method="POST",
+        )
+
+        with urlreq.urlopen(req, timeout=600) as resp:
+            # Read streaming response line by line
+            buffer = ""
+            while True:
+                chunk = resp.read(1024)
+                if not chunk:
+                    break
+                buffer += chunk.decode("utf-8")
+
+                # Process complete lines (SSE format: "data: {...}")
+                while "\n" in buffer:
+                    line, buffer = buffer.split("\n", 1)
+                    line = line.strip()
+                    if not line:
+                        continue
+                    if line.startswith("data: "):
+                        data = line[6:]  # Remove "data: " prefix
+                        if data == "[DONE]":
+                            return
+                        try:
+                            parsed = json.loads(data)
+                            delta = parsed.get("choices", [{}])[0].get("delta", {})
+                            content = delta.get("content", "")
+                            if content:
+                                yield content
+                        except json.JSONDecodeError:
+                            continue
 
     def get_config_hint(self) -> str:
         """Get configuration hint for AI."""
