@@ -9,15 +9,39 @@ from typing import Generator, Optional
 
 
 class AIService:
-    """Service for AI-powered text processing (summarization, grammar correction)."""
+    """Service for AI-powered text processing (summarization, grammar correction).
+
+    Prompts are defined in `prompts.toml` under a ``[prompts]`` table.  Each
+    section may include any of the following keys:
+
+      * instruction (string) – main task description
+      * formatting_rules or rules (list) – extra guidance that will be
+        interpolated into the template
+      * input_placeholder (string) – template used to insert the text
+      * display_name (string, optional) – human‑friendly label for the mode
+
+    New modes can be added at runtime by appending a TOML section; the
+    service exposes helpers to enumerate and add modes.
+    """
 
     def __init__(self, config):
         self.config = config
-        self._prompts = self._load_prompts()
+        # ``_prompts`` stores the rendered prompt templates; ``_prompt_configs``
+        # preserves the raw configuration from the TOML file for UI/metadata.
+        self._prompts = {}
+        self._prompt_configs = {}
+        self._load_prompts()
 
     def _load_prompts(self) -> dict:
-        """Load AI prompts from TOML config file."""
-        prompts = {}
+        """Load AI prompts from TOML config file.
+
+        The method populates both ``self._prompt_configs`` (the raw data from the
+        file) and ``self._prompts`` (the rendered prompt template used when
+        actually invoking the model).  It returns the latter for backwards
+        compatibility with the original implementation.
+        """
+        self._prompts.clear()
+        self._prompt_configs.clear()
         prompts_path = Path(__file__).parent.parent / "prompts.toml"
 
         if prompts_path.exists():
@@ -25,28 +49,10 @@ class AIService:
                 config = tomli.load(f)
 
             for mode, prompt_config in config.get("prompts", {}).items():
-                instruction = prompt_config.get("instruction", "")
-                placeholder = prompt_config.get("input_placeholder", "{text}")
+                self._prompt_configs[mode] = prompt_config.copy()
+                self._prompts[mode] = self._build_prompt(prompt_config)
 
-                # Build prompt from instruction, rules/formatting_rules, and placeholder
-                if "formatting_rules" in prompt_config:
-                    rules_text = "\n".join(
-                        f"- {rule}" for rule in prompt_config["formatting_rules"]
-                    )
-                    prompt = f"Task: {instruction}\n\nFormatting rules:\n{rules_text}\n\n{placeholder}"
-                elif "rules" in prompt_config:
-                    rules_text = "\n".join(
-                        f"{i+1}. {rule}"
-                        for i, rule in enumerate(prompt_config["rules"])
-                    )
-                    prompt = f"Task: {instruction}\n\nInstructions:\n{rules_text}\n\n{placeholder}"
-                else:
-                    prompt = f"Task: {instruction}\n\n{placeholder}"
-
-                prompts[mode] = prompt
-
-        # Fallback to empty dict if file doesn't exist or is empty
-        return prompts
+        return self._prompts
 
     def is_configured(self) -> bool:
         """Check if AI service is configured."""
@@ -59,6 +65,26 @@ class AIService:
         if self._prompts:
             return next(iter(self._prompts.values()))
         return "Process the following text:\n\n{text}"
+
+    def _build_prompt(self, prompt_config: dict) -> str:
+        """Return the rendered prompt template for a given mode config.
+
+        This mirrors the logic used when the file is first loaded, so it can be
+        reused when new modes are added dynamically.
+        """
+        instruction = prompt_config.get("instruction", "")
+        placeholder = prompt_config.get("input_placeholder", "{text}")
+
+        if "formatting_rules" in prompt_config:
+            rules_text = "\n".join(f"- {rule}" for rule in prompt_config["formatting_rules"])
+            return f"Task: {instruction}\n\nFormatting rules:\n{rules_text}\n\n{placeholder}"
+        elif "rules" in prompt_config:
+            rules_text = "\n".join(
+                f"{i+1}. {rule}" for i, rule in enumerate(prompt_config["rules"])
+            )
+            return f"Task: {instruction}\n\nInstructions:\n{rules_text}\n\n{placeholder}"
+        else:
+            return f"Task: {instruction}\n\n{placeholder}"
 
     def format_prompt(self, mode: str, text: str, names: list = None) -> str:
         """Format prompt with text and optional personal names."""
@@ -179,6 +205,65 @@ class AIService:
                                 yield content
                         except json.JSONDecodeError:
                             continue
+
+    # ------------------------------------------------------------------
+    # Mode management helpers
+    # ------------------------------------------------------------------
+
+    def available_modes(self) -> list[str]:
+        """Return a list of mode keys currently configured."""
+        return list(self._prompts.keys())
+
+    def mode_info(self) -> dict:
+        """Return metadata for each mode (display name + raw config)."""
+        # include display_name fallback to capitalized key
+        return {
+            mode: {
+                "display_name": self._prompt_configs.get(mode, {}).get("display_name")
+                or mode.replace("_", " ").capitalize(),
+                **self._prompt_configs.get(mode, {}),
+            }
+            for mode in self.available_modes()
+        }
+
+    def add_mode(self, mode: str, prompt_config: dict) -> None:
+        """Add a new mode and persist it to prompts.toml.
+
+        ``mode`` must be a valid identifier (alphanumeric and underscores).
+        ``prompt_config`` should follow the structure expected in the TOML
+        file (instruction, rules/formatting_rules, etc).  If the mode already
+        exists a ``ValueError`` is raised.
+        """
+        if not mode or not mode.replace("_", "").isalnum():
+            raise ValueError("Mode name must be alphanumeric/underscores")
+        if mode in self._prompts:
+            raise ValueError(f"Mode '{mode}' already exists")
+
+        self._prompt_configs[mode] = prompt_config.copy()
+        self._prompts[mode] = self._build_prompt(prompt_config)
+
+        # Append to the TOML file.  We don't have a writer library installed,
+        # so we build a very simple representation ourselves.  This will not
+        # preserve comments or formatting, but is good enough for the purposes
+        # of in-app editing.  Using json.dumps gives us valid TOML strings/arrays
+        # for our simple values.
+        prompts_path = Path(__file__).parent.parent / "prompts.toml"
+        lines = ["", f"[prompts.{mode}]"]
+        # write display_name first if provided
+        if "display_name" in prompt_config:
+            lines.append(f"display_name = {json.dumps(prompt_config['display_name'])}")
+        if "instruction" in prompt_config:
+            lines.append(f"instruction = {json.dumps(prompt_config['instruction'])}")
+        if "input_placeholder" in prompt_config:
+            lines.append(f"input_placeholder = {json.dumps(prompt_config['input_placeholder'])}")
+        if "formatting_rules" in prompt_config:
+            lines.append(f"formatting_rules = {json.dumps(prompt_config['formatting_rules'])}")
+        if "rules" in prompt_config:
+            lines.append(f"rules = {json.dumps(prompt_config['rules'])}")
+
+        with open(prompts_path, "a") as f:
+            f.write("\n".join(lines))
+            f.write("\n")
 
     def get_config_hint(self) -> str:
         """Get configuration hint for AI."""

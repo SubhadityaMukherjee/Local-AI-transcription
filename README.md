@@ -37,12 +37,25 @@ In the header, there's a toggle switch labeled **"Auto-fix on complete"**. When 
 
 ### AI Actions
 
-Once a transcript is ready, use the toolbar buttons:
-- **Summarize**: Generate a bullet-point summary of the transcript
-- **Auto fix text**: Clean up grammar, spelling, punctuation, and apply structural commands
+Once a transcript is ready, the toolbar will show a **mode selector** along with a
+single action button.  The selector is populated from `prompts.toml` on the
+server and you can choose between any of the configured modes (summarize,
+grammar, or your own custom modes).  Click **+ Mode** to define a new mode using
+a simple form; the new prompt will be appended to `prompts.toml` and available
+immediately.
+
+The action button label updates to reflect the currently selected mode, and
+after processing the right‑hand panel will show results tagged with the mode it
+used.
+
+Additional toolbar controls:
+
 - **Copy**: Copy transcript to clipboard
 - **Export Markdown**: Download as `.md` file
-- **Custom names/words**: There is also an option to add personal names .If you find that the AI mispronounces or misunderstands some names or words, you can add them in and they will be saved. And the next time something like this comes up, the LLM will try to correct it according to this list.
+- **Custom names/words**: There is also an option to add personal names. If you
+  find that the AI mispronounces or misunderstands some names or words, you can
+  add them in and they will be saved. The LLM will consult this list when
+  fixing transcripts.
 
 ### AI Results Panel
 
@@ -53,7 +66,14 @@ The right panel shows your AI processing history:
 
 ## Customizing Prompts
 
-The `prompts.toml` file controls how the AI processes your transcripts. You can customize:
+The `prompts.toml` file controls the set of **modes** that the AI can run.  Each
+mode corresponds to a top‑level section under `[prompts]` and the UI will
+populate a selector based on the file.  The list is displayed in the same order
+the modes appear in `prompts.toml` (not sorted alphabetically), so you can
+easily organize them however you like.  You **can** edit `prompts.toml` by hand
+and restart the server, or create new modes directly from the web interface.
+
+Below are examples of the built‑in modes:
 
 ### Summarize Prompt
 

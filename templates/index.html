@@ -101,8 +101,9 @@
       <!-- ── CENTER PANEL ──────────────────────────────────── -->
       <main class="panel-center">
         <div class="editor-toolbar">
-          <button class="btn" id="btn-summarize" disabled>⚡ Summarize</button>
-          <button class="btn" id="btn-grammar" disabled>✦ Auto fix text</button>
+          <select id="ai-mode-selector" class="mode-selector" disabled></select>
+          <button class="btn" id="btn-ai" disabled>Process</button>
+          <button class="btn btn-ghost" id="btn-add-mode" title="Create new AI mode">+ Mode</button>
           <button
             class="btn"
             id="btn-edit-voice"
@@ -220,6 +221,35 @@
           <button class="btn" id="cancel-names-modal">Cancel</button>
           <button class="btn btn-primary" id="save-names-modal">
             Save Names
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mode creation modal -->
+    <div class="modal" id="mode-modal">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>New AI Mode</h2>
+          <button class="modal-close" id="close-mode-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-hint">
+            Define a new AI processing mode. Choose a short identifier (no spaces)
+            and provide instructions; you can optionally list rules below, one per
+            line.
+          </p>
+          <label>Mode name:<br /><input type="text" id="mode-name-input" /></label>
+          <label>Display name (optional):<br /><input type="text" id="mode-display-input" /></label>
+          <label>Instruction:<br /><textarea id="mode-instruction-input" rows="3"></textarea></label>
+          <label>Rules (one per line):<br /><textarea id="mode-rules-input" rows="5"></textarea></label>
+          <label>Placeholder (defaults to "{text}"):<br /><input type="text" id="mode-placeholder-input" /></label>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" id="cancel-mode-modal">Cancel</button>
+          <button class="btn btn-primary" id="save-mode-modal">
+            Save Mode
           </button>
         </div>
       </div>

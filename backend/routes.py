@@ -170,6 +170,37 @@ def register_routes(app: Flask, config, job_store, transcription_service, ai_ser
     def list_jobs():
         return jsonify(job_store.list_all())
 
+    @app.route("/api/ai/modes", methods=["GET", "POST"])
+    def ai_modes():
+        """List or create AI modes backed by prompts.toml.
+
+        For GET requests we return both the metadata dictionary and an explicit
+        list capturing the order of modes as they appear in the TOML file.  This
+        allows the front‑end to render options in file order rather than relying
+        on JSON object enumeration semantics (which are preserved but not
+        guaranteed by spec).
+        """
+        if request.method == "GET":
+            return jsonify({
+                "modes": ai_service.mode_info(),
+                "order": ai_service.available_modes(),
+            })
+
+        # POST -> create a new mode
+        data = request.get_json(force=True)
+        mode = data.get("mode")
+        prompt_conf = data.get("config")
+        if not mode or not isinstance(prompt_conf, dict):
+            return jsonify({"error": "mode and config required"}), 400
+        try:
+            ai_service.add_mode(mode, prompt_conf)
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            print(f"[ai_modes] write error: {e}")
+            return jsonify({"error": "Failed to save mode"}), 500
+        return jsonify({"success": True})
+
     @app.route("/api/ai", methods=["POST"])
     def ai_action():
         audio_file = request.files.get("audio")
