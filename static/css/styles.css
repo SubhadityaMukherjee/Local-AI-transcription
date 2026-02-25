@@ -862,6 +862,28 @@ canvas#waveform {
   border-radius: 6px;
   padding: 2px 6px;
 }
+.chat-record-btn.recording {
+  /* Ensure a visible pulsing halo around the button */
+  box-shadow: 0 0 0 6px rgba(196, 168, 130, 0.12);
+  animation: pulse-halo 1.2s infinite ease-in-out;
+}
+.chat-record-btn.recording .dot-small {
+  display: inline-block;
+  transform-origin: center;
+  animation: pulse-scale 1.2s infinite ease-in-out;
+}
+
+@keyframes pulse-scale {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+@keyframes pulse-halo {
+  0% { box-shadow: 0 0 0 6px rgba(196,168,130,0.08); }
+  50% { box-shadow: 0 0 0 14px rgba(196,168,130,0.04); }
+  100% { box-shadow: 0 0 0 6px rgba(196,168,130,0.08); }
+}
 .chat-append-btn.recording {
   color: var(--bg);
   background: var(--green);

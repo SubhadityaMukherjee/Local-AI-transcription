@@ -25,7 +25,6 @@ rules = [
 input_placeholder = "Text: {text}"
 
 
-
 [prompts.summarize]
 display_name = "Summarize"
 instruction = "Summarize the transcript clearly and concisely."

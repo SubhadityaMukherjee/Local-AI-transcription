@@ -610,20 +610,21 @@ function watchJob(id) {
               // in the chat without requiring manual copy/paste.
               try {
                 if ((!job.ai_results || job.ai_results.length === 0) && job.transcript) {
-                  if (dom.chatInput) dom.chatInput.value = "";
                   // Ensure a sensible AI mode is selected before invoking AI
                   state.currentAIMode = dom.aiModeSelector?.value || state.currentAIMode || Object.keys(state.aiModes || {})[0];
                   updateAiButtonLabel();
-                  dom.editor.value = job.transcript;
-                  await aiAction();
+                  // Run only the selected mode for this transcript
+                  await aiAction(job.transcript, state.currentAIMode);
                 }
               } catch (e) {
                 console.warn("Auto AI action failed:", e);
               }
 
-              if (state.autoFixEnabled && job.transcript) {
-                triggerAutoFix(id, job.transcript);
-              }
+                    // Only run auto-fix if the user has enabled it AND the selected
+                    // AI mode is 'grammar' (avoid running multiple modes simultaneously).
+                    if (state.autoFixEnabled && job.transcript && state.currentAIMode === 'grammar') {
+                      triggerAutoFix(id, job.transcript);
+                    }
             });
         } else {
           toast(`Job failed: ${progress.message}`, "error");
@@ -693,18 +694,19 @@ function watchJobPoll(id) {
         // currently exist for the job.
         try {
           if ((!job.ai_results || job.ai_results.length === 0) && job.transcript) {
-            if (dom.chatInput) dom.chatInput.value = "";
             // select current mode from selector if available
             state.currentAIMode = dom.aiModeSelector?.value || state.currentAIMode || Object.keys(state.aiModes || {})[0];
             updateAiButtonLabel();
-            dom.editor.value = job.transcript;
-            await aiAction();
+            // Run only the selected mode for this transcript
+            await aiAction(job.transcript, state.currentAIMode);
           }
         } catch (e) {
           console.warn("Auto AI action failed (poll):", e);
         }
 
-        if (state.autoFixEnabled && job.transcript)
+        // Only run auto-fix if the user has enabled it AND the selected
+        // AI mode is 'grammar' (avoid running multiple modes simultaneously).
+        if (state.autoFixEnabled && job.transcript && state.currentAIMode === 'grammar')
           triggerAutoFix(id, job.transcript);
       } else {
         toast(`Job failed: ${job.error}`, "error");
@@ -818,6 +820,18 @@ function setEditorButtons(on) {
     dom.btnExport,
   ].forEach((btn) => (btn.disabled = !on));
 }
+// Guarded version used where callers may not expect missing elements
+function setEditorButtonsSafe(on) {
+  [
+    dom.aiModeSelector,
+    dom.btnAi,
+    dom.btnEditVoice,
+    dom.btnCopy,
+    dom.btnExport,
+  ].forEach((btn) => {
+    if (btn) btn.disabled = !on;
+  });
+}
 
 dom.editor.addEventListener("input", updateCharCount);
 function updateCharCount() {
@@ -828,9 +842,22 @@ function updateCharCount() {
 // ─── Toolbar ──────────────────────────────────────────────────────────────────
 
 dom.btnCopy.addEventListener("click", () => {
-  navigator.clipboard
-    .writeText(dom.editor.value)
-    .then(() => toast("Copied!", "success"));
+  // Prefer copying the editor content; if empty, copy the chat messages.
+  let text = dom.editor?.value?.trim() || "";
+  if (!text && dom.chatMessages) {
+    const parts = Array.from(dom.chatMessages.querySelectorAll('.message .message-body'))
+      .map(el => el.textContent?.trim())
+      .filter(Boolean);
+    text = parts.join('\n\n');
+  }
+  if (!text) {
+    toast('Nothing to copy', 'error');
+    return;
+  }
+  navigator.clipboard.writeText(text).then(() => toast('Copied!', 'success')).catch((e) => {
+    console.error('Copy failed', e);
+    toast('Copy failed', 'error');
+  });
 });
 
 dom.btnExport.addEventListener("click", () => {
@@ -923,21 +950,20 @@ function renderAiResults(aiResults) {
 
 
 
-async function aiAction() {
-  // Support chat input: prefer `chatInput` if present, otherwise use editor
-  const inputText = (dom.chatInput && dom.chatInput.value.trim()) || dom.editor.value;
+async function aiAction(overrideText = null, overrideMode = null) {
+  // Determine text: explicit override wins, otherwise prefer chat input then editor
+  const inputText = overrideText ?? ((dom.chatInput && dom.chatInput.value.trim()) || dom.editor.value);
   if (!inputText || !inputText.trim()) return;
 
-  // if chat input exists, append user message for a conversational feel
-  if (dom.chatInput && dom.chatInput.value.trim()) {
+  // Only append a user message when this was triggered from the chat input (not from an override)
+  if (!overrideText && dom.chatInput && dom.chatInput.value.trim()) {
     appendUserMessage(dom.chatInput.value.trim());
     dom.chatInput.value = "";
   }
 
   const text = inputText;
-  // Prefer the selector's current value (if present) so chat-triggered actions
-  // respect the user's selected AI mode immediately.
-  const mode = dom.aiModeSelector?.value || state.currentAIMode;
+  // Mode selection: explicit override, then selector, then current state
+  const mode = overrideMode || dom.aiModeSelector?.value || state.currentAIMode;
   const btn = dom.btnAi;
   const origText = btn.textContent;
   btn.disabled = true;
