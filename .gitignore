@@ -2,11 +2,12 @@ vendor/whisper.cpp/build/
 vendor/whisper.cpp/models/*.bin
 vendor/whisper.cpp/models/*.mlmodelc
 .DS_Store
-store/
-outputs/
-recordings/
-uploads/
+store/*
+outputs/*
+recordings/*
+uploads/*
 *.m4a
+*.wav
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
