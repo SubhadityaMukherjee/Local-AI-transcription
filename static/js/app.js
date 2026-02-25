@@ -100,6 +100,11 @@ const dom = {
   chatSend: document.getElementById("chat-send"),
   chatRecordBtn: document.getElementById("chat-record-btn"),
   chatAppendBtn: document.getElementById("chat-append-btn"),
+  // Jobs drawer
+  btnToggleJobsDrawer: document.getElementById("btn-toggle-jobs-drawer"),
+  jobsDrawer: document.getElementById("jobs-drawer"),
+  jobsDrawerBackdrop: document.getElementById("jobs-drawer-backdrop"),
+  jobsDrawerClose: document.getElementById("jobs-drawer-close"),
 };
 
 const ctx2d = dom.waveformCanvas ? dom.waveformCanvas.getContext("2d") : null;
@@ -1358,4 +1363,15 @@ if (dom.chatInput) {
       aiAction();
     }
   });
+}
+
+// Jobs drawer toggle wiring
+if (dom.btnToggleJobsDrawer && dom.jobsDrawer) {
+  const openDrawer = () => dom.jobsDrawer.classList.add('open');
+  const closeDrawer = () => dom.jobsDrawer.classList.remove('open');
+  dom.btnToggleJobsDrawer.addEventListener('click', () => {
+    dom.jobsDrawer.classList.toggle('open');
+  });
+  if (dom.jobsDrawerBackdrop) dom.jobsDrawerBackdrop.addEventListener('click', closeDrawer);
+  if (dom.jobsDrawerClose) dom.jobsDrawerClose.addEventListener('click', closeDrawer);
 }

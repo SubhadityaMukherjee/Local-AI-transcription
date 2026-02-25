@@ -766,6 +766,40 @@ canvas#waveform {
   flex-direction: column;
   gap: 0.6rem;
 }
+
+/* Jobs drawer */
+.jobs-drawer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 12000;
+}
+.jobs-drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.jobs-drawer-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 340px;
+  height: 100%;
+  background: var(--surface2);
+  border-left: 1px solid var(--border);
+  transform: translateX(100%);
+  transition: transform 0.25s ease;
+  display: flex;
+  flex-direction: column;
+}
+.jobs-drawer.open { pointer-events: auto; }
+.jobs-drawer.open .jobs-drawer-backdrop { opacity: 1; }
+.jobs-drawer.open .jobs-drawer-panel { transform: translateX(0%); }
+.jobs-drawer-header { padding: 0.8rem 1rem; border-bottom: 1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+.jobs-drawer-body { padding: 0.8rem; overflow-y:auto; flex:1; }
+.jobs-list { display:flex; flex-direction:column; gap:0.5rem; }
 .chat-input-row {
   display: flex;
   gap: 0.5rem;

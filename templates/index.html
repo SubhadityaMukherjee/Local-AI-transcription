@@ -25,6 +25,9 @@
       <div class="header-toggle ml-auto">
         <button class="btn btn-toggle" id="btn-auto-fix-toggle">Auto‑fix off</button>
       </div>
+      <div class="header-jobs ml-2">
+        <button class="btn btn-ghost" id="btn-toggle-jobs-drawer" title="Jobs">Jobs</button>
+      </div>
       <div class="header-personal-names">
         <button
           class="btn btn-ghost"
@@ -109,6 +112,20 @@
     </div>
 
     <div id="toast-container"></div>
+
+    <!-- Jobs Drawer (slide-out) -->
+    <div id="jobs-drawer" class="jobs-drawer" aria-hidden="true">
+      <div class="jobs-drawer-backdrop" id="jobs-drawer-backdrop"></div>
+      <div class="jobs-drawer-panel">
+        <div class="jobs-drawer-header">
+          <strong>Jobs</strong>
+          <button id="jobs-drawer-close" class="btn btn-ghost">✕</button>
+        </div>
+        <div class="jobs-drawer-body">
+          <div class="jobs-list" id="jobs-list"></div>
+        </div>
+      </div>
+    </div>
 
     <!-- Templates -->
     <template id="tpl-job">
