@@ -84,7 +84,8 @@ const dom = {
   headerProgress: document.getElementById("header-progress"),
   headerProgressFill: document.getElementById("header-progress-fill"),
   headerProgressLabel: document.getElementById("header-progress-label"),
-  autoFixToggle: document.getElementById("auto-fix-toggle"),
+  // autoFixToggle removed, using button below
+  btnAutoFix: document.getElementById("btn-auto-fix-toggle"),
   personalNamesModal: document.getElementById("personal-names-modal"),
   personalNamesInput: document.getElementById("personal-names-input"),
   modeModal: document.getElementById("mode-modal"),
@@ -403,7 +404,9 @@ function addJob(job) {
   const tpl = document.getElementById("tpl-job").content.cloneNode(true);
   const el = tpl.querySelector(".job-item");
   el.dataset.id = job.id;
-  el.querySelector(".job-name").textContent = job.filename;
+  const nameEl = el.querySelector(".job-name");
+  nameEl.textContent = job.filename;
+  nameEl.title = job.filename; // tooltip for long names
 
   const statusEl = el.querySelector(".job-status");
   statusEl.className = `job-status status-${job.status}`;
@@ -934,11 +937,25 @@ async function refreshAiPanel() {
 
 // ─── Auto-fix ─────────────────────────────────────────────────────────────────
 
-dom.autoFixToggle.checked = state.autoFixEnabled;
-dom.autoFixToggle.addEventListener("change", (e) => {
-  state.autoFixEnabled = e.target.checked;
-  localStorage.setItem("autoFixEnabled", state.autoFixEnabled);
-});
+// migrate toggle input to button
+function updateAutoFixButton() {
+  const btn = document.getElementById("btn-auto-fix-toggle");
+  if (!btn) return;
+  btn.textContent = state.autoFixEnabled ? "Auto‑fix on" : "Auto‑fix off";
+  btn.classList.toggle("active", state.autoFixEnabled);
+}
+
+// initialize after DOM ready
+updateAutoFixButton();
+
+const btnAutoFix = document.getElementById("btn-auto-fix-toggle");
+if (btnAutoFix) {
+  btnAutoFix.addEventListener("click", () => {
+    state.autoFixEnabled = !state.autoFixEnabled;
+    localStorage.setItem("autoFixEnabled", state.autoFixEnabled);
+    updateAutoFixButton();
+  });
+}
 
 async function triggerAutoFix(jobId, transcript) {
   // Guard: prevent multiple auto-fix runs for the same job
