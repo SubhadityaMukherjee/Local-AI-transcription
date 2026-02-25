@@ -934,6 +934,25 @@ function appendAssistantMessage(text, label) {
   body.className = 'message-body';
   body.textContent = text;
   el.appendChild(body);
+
+  // Add per-message actions (copy)
+  const actions = document.createElement('div');
+  actions.className = 'message-actions';
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'btn btn-ghost msg-copy-btn';
+  copyBtn.title = 'Copy message';
+  copyBtn.innerText = '⎘';
+  copyBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const txt = body.textContent || '';
+    if (!txt.trim()) {
+      toast('Nothing to copy', 'error');
+      return;
+    }
+    navigator.clipboard.writeText(txt).then(() => toast('Copied message', 'success')).catch(() => toast('Copy failed', 'error'));
+  });
+  actions.appendChild(copyBtn);
+  el.appendChild(actions);
   dom.chatMessages.appendChild(el);
   dom.chatMessages.scrollTop = dom.chatMessages.scrollHeight;
   return { el, body };

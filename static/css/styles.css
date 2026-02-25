@@ -655,7 +655,7 @@ canvas#waveform {
   font-size: 0.75rem;
   font-weight: 500;
   padding: 0.4rem 0.85rem;
-  border-radius: 5px;
+  border-radius: 9999px;
   border: 1px solid var(--border);
   background: var(--surface2);
   color: var(--text);
@@ -830,7 +830,7 @@ canvas#waveform {
   justify-content: center;
   width: 40px;
   height: 36px;
-  border-radius: 8px;
+  border-radius: 9999px;
   border: 1px solid var(--border);
   background: var(--surface2);
   color: var(--text);
@@ -859,8 +859,8 @@ canvas#waveform {
 .chat-record-btn.recording .dot-small {
   color: var(--bg);
   background: var(--red);
-  border-radius: 6px;
-  padding: 2px 6px;
+  border-radius: 9999px;
+  padding: 6px;
 }
 .chat-record-btn.recording {
   /* Ensure a visible pulsing halo around the button */

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI Transcription</title>
+    <title>Transcription Studio</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap"
@@ -14,8 +14,8 @@
   </head>
   <body>
     <header class="flex items-center p-4 bg-[var(--surface)] border-b border-[var(--border)]">
-      <h1 class="text-2xl font-serif text-[var(--accent)]">AI Transcription</h1>
-      <span class="subtitle ml-2">// uses whisper.cpp</span>
+      <h1 class="text-2xl font-serif text-[var(--accent)]">Transcription Studio</h1>
+      <span class="subtitle ml-2">// uses whisper.cpp + llama3</span>
       <div class="header-progress ml-4" id="header-progress">
         <div class="header-progress-bar-track">
           <div class="header-progress-bar-fill" id="header-progress-fill"></div>
@@ -79,7 +79,7 @@
               <button class="chat-append-btn" id="chat-append-btn" title="Append to last">
                 +
               </button>
-              <button class="btn btn-ghost" id="chat-upload-btn" title="Upload file">⤓</button>
+              <button class="btn btn-ghost" id="chat-upload-btn" title="Upload file">📁</button>
               <input type="file" id="file-input" accept="audio/*,video/*" style="display:none" />
               <textarea id="chat-input" placeholder="Send a message (Enter to send, Shift+Enter for newline)" rows="1"></textarea>
               <button class="btn btn-primary" id="chat-send">Send</button>
