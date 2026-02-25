@@ -29,8 +29,12 @@
         </label>
       </div>
       <div class="header-personal-names">
-        <button class="btn btn-ghost" id="btn-personal-names" title="Manage personal names for spelling">
-          ✎ Personal Names
+        <button
+          class="btn btn-ghost"
+          id="btn-personal-names"
+          title="Manage personal dictionary for spelling"
+        >
+          ✎ Personal Dictionary
         </button>
       </div>
     </header>
@@ -45,14 +49,24 @@
           </div>
           <div class="section-body" id="body-record">
             <div class="record-area">
-              <button class="record-btn" id="record-btn" title="Click to record">
+              <button
+                class="record-btn"
+                id="record-btn"
+                title="Click to record"
+              >
                 <div class="dot"></div>
               </button>
-              <button class="record-btn append-btn" id="append-btn" title="Append to last recording">
+              <button
+                class="record-btn append-btn"
+                id="append-btn"
+                title="Append to last recording"
+              >
                 <span class="append-icon">+</span>
               </button>
               <div class="timer" id="timer"></div>
-              <span class="record-status" id="record-status">Click to start recording</span>
+              <span class="record-status" id="record-status"
+                >Click to start recording</span
+              >
               <canvas id="waveform"></canvas>
             </div>
           </div>
@@ -67,7 +81,9 @@
             <div class="upload-zone" id="upload-zone">
               <input type="file" id="file-input" accept="audio/*,video/*" />
               <div class="upload-icon">⬆</div>
-              <div style="font-size: 0.82rem">Drop audio or video file here</div>
+              <div style="font-size: 0.82rem">
+                Drop audio or video file here
+              </div>
               <div class="upload-hint">mp3, wav, flac, m4a, mp4, mkv, mov…</div>
             </div>
           </div>
@@ -87,11 +103,20 @@
         <div class="editor-toolbar">
           <button class="btn" id="btn-summarize" disabled>⚡ Summarize</button>
           <button class="btn" id="btn-grammar" disabled>✦ Auto fix text</button>
-          <button class="btn" id="btn-edit-voice" disabled title="Edit text with voice commands">🎤 Edit</button>
+          <button
+            class="btn"
+            id="btn-edit-voice"
+            disabled
+            title="Edit text with voice commands"
+          >
+            🎤 Edit
+          </button>
           <button class="btn btn-ghost" id="btn-copy" disabled>⎘ Copy</button>
           <div class="spacer"></div>
           <span class="char-count" id="char-count"></span>
-          <button class="btn btn-primary" id="btn-export" disabled>↓ Export Markdown</button>
+          <button class="btn btn-primary" id="btn-export" disabled>
+            ↓ Export Markdown
+          </button>
         </div>
 
         <div class="editor-area">
@@ -100,11 +125,17 @@
             <div class="empty-text">Record audio or upload a file to begin</div>
           </div>
 
-          <textarea id="transcript-editor" spellcheck="true" placeholder="Transcript will appear here…"></textarea>
+          <textarea
+            id="transcript-editor"
+            spellcheck="true"
+            placeholder="Transcript will appear here…"
+          ></textarea>
 
           <div class="processing-overlay" id="processing-overlay">
             <div class="spinner"></div>
-            <div class="processing-label" id="processing-label">Processing…</div>
+            <div class="processing-label" id="processing-label">
+              Processing…
+            </div>
             <div class="progress-block">
               <div class="progress-bar-track">
                 <div class="progress-bar-fill" id="progress-bar-fill"></div>
@@ -134,7 +165,13 @@
         <div class="job-name"></div>
         <div class="job-meta">
           <span class="job-status"></span>
-          <a class="job-download" title="Download" download style="display:none">⬇</a>
+          <a
+            class="job-download"
+            title="Download"
+            download
+            style="display: none"
+            >⬇</a
+          >
           <button class="job-delete" title="Delete">✕</button>
         </div>
         <div class="job-progress"></div>
@@ -168,7 +205,10 @@
           <button class="modal-close" id="close-names-modal">&times;</button>
         </div>
         <div class="modal-body">
-          <p class="modal-hint">Enter names (one per line) that the AI should recognize and spell correctly during transcription fixes.</p>
+          <p class="modal-hint">
+            Enter names (one per line) that the AI should recognize and spell
+            correctly during transcription fixes.
+          </p>
           <textarea
             id="personal-names-input"
             class="personal-names-textarea"
@@ -178,7 +218,9 @@
         </div>
         <div class="modal-footer">
           <button class="btn" id="cancel-names-modal">Cancel</button>
-          <button class="btn btn-primary" id="save-names-modal">Save Names</button>
+          <button class="btn btn-primary" id="save-names-modal">
+            Save Names
+          </button>
         </div>
       </div>
     </div>
@@ -186,3 +228,4 @@
     <script src="../static/js/app.js"></script>
   </body>
 </html>
+

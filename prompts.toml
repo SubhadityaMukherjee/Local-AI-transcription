@@ -10,39 +10,17 @@ formatting_rules = [
 input_placeholder = "Transcript: {text}"
 
 [prompts.grammar]
-instruction = "Clean the text and apply spoken structural commands."
+instruction = "This is a transcription. Fix the text without changing my wording."
 rules = [
-  "Fix grammar, spelling, spacing, and punctuation only.",
-  "You can split it into logical paragraphs if required.",
-  "Do not be too creative.",
-  "Preserve original meaning and tone.",
-  "Do NOT summarize.",
-  "Do NOT rephrase for style.",
-  "Do NOT reorganize sentences.",
-  "IMPORTANT: Correctly spell the following personal names: {names}",
-  "Interpret structural commands:",
-  "'begin list' → start bullet list.",
-  "'end list' → close bullet list.",
-  "'begin sublist' → indent under current item.",
-  "'end sublist' → return one indentation level.",
-  "'next item' or 'new item' → new bullet.",
-  "'begin numbered list' → start ordered list.",
-  "'end numbered list' → close ordered list.",
-  "'new paragraph' → blank line.",
-  "'line break' → single line break.",
-  "'heading level one/two/three' → convert following text into Markdown heading.",
-  "Do not arbitrarly add heading levels",
-  "'begin quote' → start blockquote.",
-  "'end quote' → end blockquote.",
-  "'begin code' → start fenced code block.",
-  "'end code' → close fenced code block.",
-  "Remove all structural control phrases from final output.",
-  "Maintain correct nesting and close unclosed structures at document end.",
-  "Only create lists when an explicit structural command appears",
-  "If no list command is present in the input, do NOT create bullet or numbered lists.",
-  "Do NOT introduce any Markdown structure that was not explicitly commanded.",
-  "Preserve paragraph form exactly unless a structural command modifies it.",
-  "Return only final Markdown and nothing else.",
+  "Fix grammar, spelling, capitalization, spacing, and punctuation only.",
+  "Combine sentences into clear paragraphs by topic.",
+  "Do not change, remove, or add any words I used.",
+  "Allowed exceptions: You may correct spelling mistakes, adjust spacing/line breaks, and apply markdown formatting ONLY when explicitly requested.",
+  "These are words that can be used to correct names or other things: {names}. If a name/word appears in the text, check against this list.",
+  "If I say 'make this a list': Convert the content into a markdown list using '-', remove any structural cues like 'next' or 'end list', do not change wording of items.",
+  "If I say 'make this a numbered list': Convert into a numbered markdown list using '1.', do not change wording of items.",
+  "If I say 'heading one', 'heading two', or 'heading three': Convert that sentence into a markdown heading of that level.",
+  "Just write the modified text and nothing else."
 ]
 input_placeholder = "Text: {text}"
 
@@ -91,4 +69,3 @@ rules = [
 ]
 
 input_placeholder = "Text:\n{text}"
-

@@ -44,6 +44,10 @@ const state = {
 
   // Prefs
   autoFixEnabled: localStorage.getItem("autoFixEnabled") === "true",
+  
+  // Auto-fix tracking to prevent multiple runs
+  autoFixRunning: false,
+  autoFixCompleted: new Set(),  // Track jobs that have been auto-fixed
 };
 
 // ─── DOM refs ─────────────────────────────────────────────────────────────────
@@ -411,6 +415,9 @@ async function deleteJob(id) {
   await fetch(`/api/jobs/${id}`, { method: "DELETE" });
   state.jobElements.get(id)?.remove();
   state.jobElements.delete(id);
+  
+  // Clear auto-fix tracking for this job
+  state.autoFixCompleted.delete(id);
 
   if (state.activeJobId === id) {
     state.activeJobId = null;
@@ -883,8 +890,15 @@ dom.autoFixToggle.addEventListener("change", (e) => {
 });
 
 async function triggerAutoFix(jobId, transcript) {
+  // Guard: prevent multiple auto-fix runs for the same job
   if (!state.autoFixEnabled || !transcript) return;
+  if (state.autoFixCompleted.has(jobId)) return;
+  if (state.autoFixRunning) return;
 
+  // Mark as running
+  state.autoFixRunning = true;
+  state.autoFixCompleted.add(jobId);
+  
   toast("Auto-fixing transcript…", "info");
 
   // Create temporary AI result block immediately
@@ -984,7 +998,12 @@ async function triggerAutoFix(jobId, transcript) {
       toast(`Auto-fix failed: ${e.message}`, "error");
     }
 
+    // Remove from completed set so user can retry
+    state.autoFixCompleted.delete(jobId);
     renderAiResults([]);
+  } finally {
+    // Reset the running flag
+    state.autoFixRunning = false;
   }
 }
 // ─── Voice Edit ───────────────────────────────────────────────────────────────

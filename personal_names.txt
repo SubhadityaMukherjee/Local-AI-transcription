@@ -8,3 +8,12 @@ Pieter
 Joaquin
 TU/e
 ALFIE
+Geert
+Ma
+Baba
+Pompi
+OpenML
+Eindhoven
+AutoML
+Soorya
+Auto Grader
