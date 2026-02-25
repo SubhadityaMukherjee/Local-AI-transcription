@@ -3,26 +3,30 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI Transcription</title>
+    <title>Transcription Studio</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="../static/css/styles.css" />
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.3.2/dist/tailwind.min.css" rel="stylesheet">
   </head>
   <body>
-    <header>
-      <h1>AI Transcription</h1>
-      <span class="subtitle">// uses whisper.cpp</span>
-      <div class="header-progress" id="header-progress">
+    <header class="flex items-center p-4 bg-[var(--surface)] border-b border-[var(--border)]">
+      <h1 class="text-2xl font-serif text-[var(--accent)]">Transcription Studio</h1>
+      <span class="subtitle ml-2">// uses whisper.cpp + llama3</span>
+      <div class="header-progress ml-4" id="header-progress">
         <div class="header-progress-bar-track">
           <div class="header-progress-bar-fill" id="header-progress-fill"></div>
         </div>
         <span class="header-progress-label" id="header-progress-label"></span>
       </div>
-      <div class="header-toggle">
+      <div class="header-toggle ml-auto">
         <button class="btn btn-toggle" id="btn-auto-fix-toggle">Auto‑fix off</button>
+      </div>
+      <div class="header-jobs ml-2">
+        <button class="btn btn-ghost" id="btn-toggle-jobs-drawer" title="Jobs">Jobs</button>
       </div>
       <div class="header-personal-names">
         <button
@@ -35,68 +39,10 @@
       </div>
     </header>
 
-    <div class="layout">
-      <!-- ── LEFT PANEL ──────────────────────────────────── -->
-      <aside class="panel-left">
-        <div class="section">
-          <div class="section-label" id="toggle-record">
-            <span class="toggle-icon">▾</span>
-            Record Audio
-          </div>
-          <div class="section-body" id="body-record">
-            <div class="record-area">
-              <button
-                class="record-btn"
-                id="record-btn"
-                title="Click to record"
-              >
-                <div class="dot"></div>
-              </button>
-              <button
-                class="record-btn append-btn"
-                id="append-btn"
-                title="Append to last recording"
-              >
-                <span class="append-icon">+</span>
-              </button>
-              <div class="timer" id="timer"></div>
-              <span class="record-status" id="record-status"
-                >Click to start recording</span
-              >
-              <canvas id="waveform"></canvas>
-            </div>
-          </div>
-        </div>
-
-        <div class="section">
-          <div class="section-label" id="toggle-upload">
-            <span class="toggle-icon">▾</span>
-            Upload File
-          </div>
-          <div class="section-body" id="body-upload">
-            <div class="upload-zone" id="upload-zone">
-              <input type="file" id="file-input" accept="audio/*,video/*" />
-              <div class="upload-icon">⬆</div>
-              <div style="font-size: 0.82rem">
-                Drop audio or video file here
-              </div>
-              <div class="upload-hint">mp3, wav, flac, m4a, mp4, mkv, mov…</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="jobs-section-header">
-          <div class="jobs-section-label" id="toggle-jobs">
-            <span class="toggle-icon">▾</span>
-            Jobs
-          </div>
-        </div>
-        <div class="jobs-list collapsed" id="jobs-list"></div>
-      </aside>
-
-      <!-- ── CENTER PANEL ──────────────────────────────────── -->
-      <main class="panel-center">
-        <div class="editor-toolbar">
+    <div class="layout flex h-full">
+      <!-- ── MAIN PANEL (chat) ──────────────────────────────────── -->
+      <main class="panel-center flex-1 bg-[var(--surface)] p-4">
+        <div class="editor-toolbar flex items-center space-x-2 mb-2">
           <select id="ai-mode-selector" class="mode-selector" disabled></select>
           <button class="btn" id="btn-ai" disabled>Process</button>
           <button class="btn btn-ghost" id="btn-add-mode" title="Create new AI mode">+ Mode</button>
@@ -116,16 +62,35 @@
           </button>
         </div>
 
-        <div class="editor-area">
-          <div class="empty-state" id="empty-state">
-            <div class="empty-glyph">◌</div>
-            <div class="empty-text">Record audio or upload a file to begin</div>
+        <div class="editor-area relative">
+          <!-- Simplified chat-style UI -->
+          <div class="chat-container">
+            <div class="chat-messages" id="chat-messages">
+              <div class="empty-state" id="empty-state">
+                <div class="empty-glyph">◌</div>
+                <div class="empty-text">Start a conversation — type below or upload audio to begin</div>
+              </div>
+            </div>
+
+            <div class="chat-input-row">
+              <button class="chat-record-btn" id="chat-record-btn" title="Record">
+                <span class="dot-small">●</span>
+              </button>
+              <button class="chat-append-btn" id="chat-append-btn" title="Append to last">
+                +
+              </button>
+              <button class="btn btn-ghost" id="chat-upload-btn" title="Upload file">📁</button>
+              <input type="file" id="file-input" accept="audio/*,video/*" style="display:none" />
+              <textarea id="chat-input" placeholder="Send a message (Enter to send, Shift+Enter for newline)" rows="1"></textarea>
+              <button class="btn btn-primary" id="chat-send">Send</button>
+            </div>
           </div>
 
           <textarea
             id="transcript-editor"
             spellcheck="true"
             placeholder="Transcript will appear here…"
+            style="display:none"
           ></textarea>
 
           <div class="processing-overlay" id="processing-overlay">
@@ -146,21 +111,29 @@
           </div>
         </div>
       </main>
-
-      <!-- ── RIGHT PANEL ──────────────────────────────────── -->
-      <aside class="panel-right">
-        <div class="panel-right-header">AI Results</div>
-        <div class="ai-results-panel" id="ai-results"></div>
-      </aside>
     </div>
 
     <div id="toast-container"></div>
 
+    <!-- Jobs Drawer (slide-out) -->
+    <div id="jobs-drawer" class="jobs-drawer" aria-hidden="true">
+      <div class="jobs-drawer-backdrop" id="jobs-drawer-backdrop"></div>
+      <div class="jobs-drawer-panel">
+        <div class="jobs-drawer-header">
+          <strong>Jobs</strong>
+          <button id="jobs-drawer-close" class="btn btn-ghost">✕</button>
+        </div>
+        <div class="jobs-drawer-body">
+          <div class="jobs-list" id="jobs-list"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Templates -->
     <template id="tpl-job">
-      <div class="job-item">
+      <div class="job-item relative p-2 mb-2 rounded shadow-sm bg-[var(--surface)] hover:shadow-md">
         <div class="job-name"></div>
-        <div class="job-meta">
+        <div class="job-meta flex items-center">
           <span class="job-status"></span>
           <a
             class="job-download"
@@ -176,13 +149,13 @@
     </template>
 
     <template id="tpl-ai-result">
-      <div class="ai-result-block">
-        <div class="ai-result-header">
+      <div class="ai-result-block border border-[var(--border)] rounded mb-2 bg-[var(--surface)] shadow-sm">
+        <div class="ai-result-header flex items-center p-2">
           <span class="ai-result-badge"></span>
           <span class="ai-result-time"></span>
           <button class="ai-result-delete" title="Delete">✕</button>
         </div>
-        <div class="ai-result-body"></div>
+        <div class="ai-result-body p-2"></div>
         <div class="ai-result-progress">
           <div class="ai-result-progress-fill"></div>
         </div>
@@ -194,9 +167,9 @@
     </template>
 
     <!-- Personal Names Modal -->
-    <div class="modal" id="personal-names-modal">
-      <div class="modal-backdrop"></div>
-      <div class="modal-content">
+    <div class="modal fixed inset-0" id="personal-names-modal">
+      <div class="modal-backdrop absolute inset-0 bg-black opacity-50"></div>
+      <div class="modal-content relative bg-[var(--surface)] rounded-lg shadow-lg max-w-md w-full p-4 mx-auto my-auto">
         <div class="modal-header">
           <h2>Personal Names for Spelling</h2>
           <button class="modal-close" id="close-names-modal">&times;</button>
@@ -223,9 +196,9 @@
     </div>
 
     <!-- Mode creation modal -->
-    <div class="modal" id="mode-modal">
-      <div class="modal-backdrop"></div>
-      <div class="modal-content">
+    <div class="modal fixed inset-0" id="mode-modal">
+      <div class="modal-backdrop absolute inset-0 bg-black opacity-50"></div>
+      <div class="modal-content relative bg-[var(--surface)] rounded-lg shadow-lg max-w-md w-full p-4 mx-auto my-auto">
         <div class="modal-header">
           <h2>New AI Mode</h2>
           <button class="modal-close" id="close-mode-modal">&times;</button>

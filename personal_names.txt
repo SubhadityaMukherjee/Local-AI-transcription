@@ -17,3 +17,7 @@ Eindhoven
 AutoML
 Soorya
 Auto Grader
+AutoDW
+Agentic Core
+ETDHub
+Gabrielle

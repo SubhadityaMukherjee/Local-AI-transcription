@@ -210,10 +210,10 @@ h1 {
   padding: 0.3rem 0.6rem;
 }
 
-/* 3-column grid: left sidebar | main editor | right results panel */
+/* layout simplified to single column now that side panels are removed */
 .layout {
-  display: grid;
-  grid-template-columns: 300px 1fr 340px;
+  display: flex;
+  flex-direction: column;
   height: calc(100vh - 53px);
   overflow: hidden;
 }
@@ -305,12 +305,16 @@ h1 {
   background: rgba(224, 92, 92, 0.08);
 }
 
-.record-btn.recording {
-  border-color: var(--red);
-  background: rgba(224, 92, 92, 0.15);
-  animation: pulse-ring 1.5s ease infinite;
+.record-btn.recording,
+.chat-record-btn.recording,
+.chat-append-btn.recording,
+#record-btn.recording,
+#chat-record-btn.recording,
+#append-btn.recording,
+#chat-append-btn.recording {
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  color: #0e0e0f;
 }
-
 .record-btn .dot {
   width: 22px;
   height: 22px;
@@ -651,7 +655,7 @@ canvas#waveform {
   font-size: 0.75rem;
   font-weight: 500;
   padding: 0.4rem 0.85rem;
-  border-radius: 5px;
+  border-radius: 9999px;
   border: 1px solid var(--border);
   background: var(--surface2);
   color: var(--text);
@@ -751,17 +755,201 @@ canvas#waveform {
   min-height: 200px;
 }
 
-/* ── PROCESSING OVERLAY ───────────────────────────────────────────── */
-.processing-overlay {
+/* Chat-style UI (compact, single-column conversation) */
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 180px);
+  gap: 0.6rem;
+}
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+/* Jobs drawer */
+.jobs-drawer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 12000;
+}
+.jobs-drawer-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(14, 14, 15, 0.88);
-  display: none;
+  background: rgba(0,0,0,0.4);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.jobs-drawer-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 340px;
+  height: 100%;
+  background: var(--surface2);
+  border-left: 1px solid var(--border);
+  transform: translateX(100%);
+  transition: transform 0.25s ease;
+  display: flex;
   flex-direction: column;
+}
+.jobs-drawer.open { pointer-events: auto; }
+.jobs-drawer.open .jobs-drawer-backdrop { opacity: 1; }
+.jobs-drawer.open .jobs-drawer-panel { transform: translateX(0%); }
+.jobs-drawer-header { padding: 0.8rem 1rem; border-bottom: 1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+.jobs-drawer-body { padding: 0.8rem; overflow-y:auto; flex:1; }
+.jobs-list { display:flex; flex-direction:column; gap:0.5rem; }
+.chat-input-row {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.6rem;
+  /* border-top removed to eliminate bottom bar below messages */
+  background: linear-gradient(180deg, rgba(255,255,255,0.01), transparent);
+}
+.chat-input-row textarea {
+  flex: 1;
+  min-height: 36px;
+  max-height: 160px;
+  padding: 0.6rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  resize: vertical;
+  font-family: "DM Sans", sans-serif;
+}
+.chat-record-btn,
+.chat-append-btn {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
-  backdrop-filter: blur(4px);
+  width: 40px;
+  height: 36px;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+.chat-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+.chat-record-btn .dot-small {
+  color: var(--red);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.chat-record-btn.recording,
+.chat-record-btn.recording .dot-small {
+  color: var(--bg);
+  background: var(--red);
+  border-radius: 9999px;
+  padding: 6px;
+}
+.chat-record-btn.recording {
+  /* Ensure a visible pulsing halo around the button */
+  box-shadow: 0 0 0 6px rgba(196, 168, 130, 0.12);
+  animation: pulse-halo 1.2s infinite ease-in-out;
+}
+.chat-record-btn.recording .dot-small {
+  display: inline-block;
+  transform-origin: center;
+  animation: pulse-scale 1.2s infinite ease-in-out;
+}
+
+@keyframes pulse-scale {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+@keyframes pulse-halo {
+  0% { box-shadow: 0 0 0 6px rgba(196,168,130,0.08); }
+  50% { box-shadow: 0 0 0 14px rgba(196,168,130,0.04); }
+  100% { box-shadow: 0 0 0 6px rgba(196,168,130,0.08); }
+}
+.chat-append-btn.recording {
+  color: var(--bg);
+  background: var(--green);
+}
+.message {
+  max-width: 78%;
+  padding: 0.6rem 0.8rem;
+  border-radius: 12px;
+  line-height: 1.4;
+  font-size: 0.95rem;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.2);
+}
+.message.user {
+  align-self: flex-end;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  color: #0e0e0f;
+  border-bottom-right-radius: 4px;
+}
+.message.assistant {
+  align-self: flex-start;
+  background: var(--surface);
+  color: var(--text);
+  border-bottom-left-radius: 4px;
+}
+
+/* label box inside assistant messages */
+.message .message-label {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.25rem;
+  padding: 0.15rem 0.5rem;
+  background: rgba(232, 213, 176, 0.1);
+  color: var(--accent2);
+  border-radius: 8px;
+  display: inline-block;
+}
+.message .message-body {
+  white-space: pre-wrap;
+}
+.message .meta {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin-top: 0.35rem;
+}
+.chat-messages .empty-state { padding-top: 1.6rem; }
+
+/* ── PROCESSING OVERLAY ───────────────────────────────────────────── */
+.processing-overlay {
+  /* Small non-modal processing panel in the top-right instead of full-page */
+  position: fixed;
+  top: 72px;
+  right: 20px;
+  width: 340px;
+  background: rgba(14, 14, 15, 0.92);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 0.8rem;
+  display: none;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.6rem;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+  z-index: 10000;
 }
 
 .processing-overlay.active {
@@ -781,6 +969,27 @@ canvas#waveform {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* Recording button visual emphasis */
+.recording {
+  box-shadow: 0 0 0 6px rgba(196, 168, 130, 0.12);
+  position: relative;
+  animation: pulse 1.2s infinite ease-in-out;
+}
+
+/* Specific target for chat/toolbar record buttons */
+.record-btn.recording,
+.chat-record-btn.recording,
+.chat-append-btn.recording {
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  color: #0e0e0f;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 6px rgba(196,168,130,0.08); }
+  50% { box-shadow: 0 0 0 12px rgba(196,168,130,0.06); }
+  100% { box-shadow: 0 0 0 6px rgba(196,168,130,0.08); }
 }
 
 .progress-block {

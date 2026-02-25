@@ -41,6 +41,8 @@ const state = {
   lastUpdateTime: {},
   lastProgress: {},
   elapsedInterval: null,
+  // Track which jobs we've auto-triggered AI for to avoid duplicates
+  aiTriggeredJobs: new Set(),
 
   // Prefs
   autoFixEnabled: localStorage.getItem("autoFixEnabled") === "true",
@@ -94,9 +96,21 @@ const dom = {
   modeInstructionInput: document.getElementById("mode-instruction-input"),
   modeRulesInput: document.getElementById("mode-rules-input"),
   modePlaceholderInput: document.getElementById("mode-placeholder-input"),
+  // Chat UI elements (new)
+  chatMessages: document.getElementById("chat-messages"),
+  chatInput: document.getElementById("chat-input"),
+  chatSend: document.getElementById("chat-send"),
+  chatRecordBtn: document.getElementById("chat-record-btn"),
+  chatAppendBtn: document.getElementById("chat-append-btn"),
+  chatUploadBtn: document.getElementById("chat-upload-btn"),
+  // Jobs drawer
+  btnToggleJobsDrawer: document.getElementById("btn-toggle-jobs-drawer"),
+  jobsDrawer: document.getElementById("jobs-drawer"),
+  jobsDrawerBackdrop: document.getElementById("jobs-drawer-backdrop"),
+  jobsDrawerClose: document.getElementById("jobs-drawer-close"),
 };
 
-const ctx2d = dom.waveformCanvas.getContext("2d");
+const ctx2d = dom.waveformCanvas ? dom.waveformCanvas.getContext("2d") : null;
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 
@@ -200,8 +214,10 @@ function mimeToExt(mimeType) {
   return "webm";
 }
 
-dom.recordBtn.addEventListener("click", toggleRecord);
-dom.appendBtn.addEventListener("click", toggleAppendRecord);
+if (dom.recordBtn) dom.recordBtn.addEventListener("click", toggleRecord);
+if (dom.appendBtn) dom.appendBtn.addEventListener("click", toggleAppendRecord);
+if (dom.chatRecordBtn) dom.chatRecordBtn.addEventListener("click", toggleRecord);
+if (dom.chatAppendBtn) dom.chatAppendBtn.addEventListener("click", toggleAppendRecord);
 
 async function toggleAppendRecord() {
   if (!state.activeJobId) {
@@ -262,12 +278,25 @@ async function startRecording(isAppend = false) {
 
   state.recordStart = Date.now();
   state.timerInterval = setInterval(updateTimer, 500);
-  dom.recordBtn.classList.add("recording");
-  dom.appendBtn.classList.toggle("recording", isAppend);
-  dom.statusEl.textContent = isAppend
-    ? "Appending… click to stop"
-    : "Recording… click to stop";
-  dom.statusEl.classList.add("active");
+  if (dom.recordBtn) dom.recordBtn.classList.add("recording");
+  if (dom.chatRecordBtn) dom.chatRecordBtn.classList.add("recording");
+  if (dom.appendBtn) dom.appendBtn.classList.toggle("recording", isAppend);
+  if (dom.chatAppendBtn) dom.chatAppendBtn.classList.toggle("recording", isAppend);
+  // Apply inline styles as a fallback if CSS isn't applied/loaded.
+  if (dom.chatRecordBtn) {
+    dom.chatRecordBtn.style.animation = "pulse 1.2s infinite ease-in-out";
+    dom.chatRecordBtn.style.boxShadow = "0 0 0 6px rgba(196, 168, 130, 0.12)";
+  }
+  if (dom.chatAppendBtn && isAppend) {
+    dom.chatAppendBtn.style.animation = "pulse 1.2s infinite ease-in-out";
+    dom.chatAppendBtn.style.boxShadow = "0 0 0 6px rgba(196, 168, 130, 0.12)";
+  }
+  if (dom.statusEl) {
+    dom.statusEl.textContent = isAppend
+      ? "Appending… click to stop"
+      : "Recording… click to stop";
+    dom.statusEl.classList.add("active");
+  }
 }
 
 function stopRecording() {
@@ -275,12 +304,24 @@ function stopRecording() {
   state.recordStream?.getTracks().forEach((t) => t.stop());
   clearInterval(state.timerInterval);
   cancelAnimationFrame(state.animFrame);
-  dom.recordBtn.classList.remove("recording");
-  dom.appendBtn.classList.remove("recording");
-  dom.statusEl.textContent = "Uploading…";
-  dom.statusEl.classList.remove("active");
-  dom.timerEl.textContent = "";
-  ctx2d.clearRect(0, 0, dom.waveformCanvas.width, dom.waveformCanvas.height);
+  if (dom.recordBtn) dom.recordBtn.classList.remove("recording");
+  if (dom.chatRecordBtn) dom.chatRecordBtn.classList.remove("recording");
+  if (dom.chatRecordBtn) {
+    dom.chatRecordBtn.style.animation = "";
+    dom.chatRecordBtn.style.boxShadow = "";
+  }
+  if (dom.appendBtn) dom.appendBtn.classList.remove("recording");
+  if (dom.chatAppendBtn) dom.chatAppendBtn.classList.remove("recording");
+  if (dom.chatAppendBtn) {
+    dom.chatAppendBtn.style.animation = "";
+    dom.chatAppendBtn.style.boxShadow = "";
+  }
+  if (dom.statusEl) {
+    dom.statusEl.textContent = "Uploading…";
+    dom.statusEl.classList.remove("active");
+  }
+  if (dom.timerEl) dom.timerEl.textContent = "";
+  if (ctx2d && dom.waveformCanvas) ctx2d.clearRect(0, 0, dom.waveformCanvas.width, dom.waveformCanvas.height);
 }
 
 async function submitRecording() {
@@ -290,7 +331,7 @@ async function submitRecording() {
 
   if (blob.size < 1000) {
     toast("Recording too short or empty — try again", "error");
-    dom.statusEl.textContent = "Click to start recording";
+    if (dom.statusEl) dom.statusEl.textContent = "Click to start recording";
     return;
   }
 
@@ -308,6 +349,8 @@ async function submitRecording() {
         watchJob(state.appendJobId);
         selectJob(state.appendJobId);
       } else {
+        // start a new chat for this recording
+        startNewConversation();
         addJob({
           id: data.job_id,
           filename: `recording.${ext}`,
@@ -327,15 +370,16 @@ async function submitRecording() {
 
   state.appendMode = false;
   state.appendJobId = null;
-  dom.statusEl.textContent = "Click to start recording";
+  if (dom.statusEl) dom.statusEl.textContent = "Click to start recording";
 }
 
 function updateTimer() {
   const s = Math.floor((Date.now() - state.recordStart) / 1000);
-  dom.timerEl.textContent = `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+  if (dom.timerEl) dom.timerEl.textContent = `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 }
 
 function drawWaveform() {
+  if (!ctx2d || !dom.waveformCanvas || !state.analyser) return;
   state.animFrame = requestAnimationFrame(drawWaveform);
   const data = new Uint8Array(state.analyser.frequencyBinCount);
   state.analyser.getByteTimeDomainData(data);
@@ -357,21 +401,36 @@ function drawWaveform() {
 
 // ─── File Upload ──────────────────────────────────────────────────────────────
 
-dom.fileInput.addEventListener("change", (e) => {
-  if (e.target.files[0]) uploadFile(e.target.files[0]);
-});
-dom.uploadZone.addEventListener("dragover", (e) => {
+if (dom.fileInput) {
+  dom.fileInput.addEventListener("change", (e) => {
+    if (e.target.files[0]) uploadFile(e.target.files[0]);
+  });
+}
+if (dom.chatUploadBtn && dom.fileInput) {
+  dom.chatUploadBtn.addEventListener('click', () => dom.fileInput.click());
+}
+
+// Allow dropping files anywhere on the page to upload (graceful fallback)
+document.addEventListener('dragover', (e) => e.preventDefault());
+document.addEventListener('drop', (e) => {
   e.preventDefault();
-  dom.uploadZone.classList.add("drag-over");
+  const f = e.dataTransfer?.files?.[0];
+  if (f) uploadFile(f);
 });
-dom.uploadZone.addEventListener("dragleave", () =>
-  dom.uploadZone.classList.remove("drag-over"),
-);
-dom.uploadZone.addEventListener("drop", (e) => {
-  e.preventDefault();
-  dom.uploadZone.classList.remove("drag-over");
-  if (e.dataTransfer.files[0]) uploadFile(e.dataTransfer.files[0]);
-});
+if (dom.uploadZone) {
+  dom.uploadZone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    dom.uploadZone.classList.add("drag-over");
+  });
+  dom.uploadZone.addEventListener("dragleave", () =>
+    dom.uploadZone.classList.remove("drag-over"),
+  );
+  dom.uploadZone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dom.uploadZone.classList.remove("drag-over");
+    if (e.dataTransfer.files[0]) uploadFile(e.dataTransfer.files[0]);
+  });
+}
 
 async function uploadFile(file) {
   const fd = new FormData();
@@ -384,6 +443,8 @@ async function uploadFile(file) {
       toast(data.error, "error");
       return;
     }
+    // start a new conversation when uploading a file
+    startNewConversation();
     addJob({
       id: data.job_id,
       filename: file.name,
@@ -444,9 +505,11 @@ function updateJobEl(job) {
 }
 
 function selectJob(id) {
-  dom.jobsList
-    .querySelectorAll(".job-item")
-    .forEach((e) => e.classList.remove("active"));
+  if (dom.jobsList) {
+    dom.jobsList
+      .querySelectorAll(".job-item")
+      .forEach((e) => e.classList.remove("active"));
+  }
   state.jobElements.get(id)?.classList.add("active");
   state.activeJobId = id;
 
@@ -537,15 +600,37 @@ function watchJob(id) {
         if (progress.stage === "done") {
           fetch(`/api/status/${id}`)
             .then(r => r.json())
-            .then(job => {
+            .then(async (job) => {
               toast("Transcription complete!", "success");
               if (state.activeJobId === id || !state.activeJobId) {
                 showTranscript(job.transcript, job.ai_results);
                 selectJob(id);
               }
-              if (state.autoFixEnabled && job.transcript) {
-                triggerAutoFix(id, job.transcript);
+
+              // If there are no AI results saved for this job yet, automatically
+              // invoke the AI action so the transcript is processed and appears
+              // in the chat without requiring manual copy/paste.
+              try {
+                if ((!job.ai_results || job.ai_results.length === 0) && job.transcript) {
+                  // Avoid double-triggering for the same job
+                  if (!state.aiTriggeredJobs.has(id)) {
+                    state.aiTriggeredJobs.add(id);
+                    // Ensure a sensible AI mode is selected before invoking AI
+                    state.currentAIMode = dom.aiModeSelector?.value || state.currentAIMode || Object.keys(state.aiModes || {})[0];
+                    updateAiButtonLabel();
+                    // Run only the selected mode for this transcript
+                    await aiAction(job.transcript, state.currentAIMode);
+                  }
+                }
+              } catch (e) {
+                console.warn("Auto AI action failed:", e);
               }
+
+                    // Only run auto-fix if the user has enabled it AND the selected
+                    // AI mode is 'grammar' (avoid running multiple modes simultaneously).
+                    if (state.autoFixEnabled && job.transcript && state.currentAIMode === 'grammar') {
+                      triggerAutoFix(id, job.transcript);
+                    }
             });
         } else {
           toast(`Job failed: ${progress.message}`, "error");
@@ -558,6 +643,8 @@ function watchJob(id) {
         delete state.jobStartTime[id];
         delete state.lastUpdateTime[id];
         delete state.lastProgress[id];
+        // Allow re-triggering later if job is rerun
+        state.aiTriggeredJobs.delete(id);
       }
     } catch (e) {
       console.error("Error parsing progress payload:", e);
@@ -602,6 +689,7 @@ function watchJobPoll(id) {
       delete state.jobStartTime[id];
       delete state.lastUpdateTime[id];
       delete state.lastProgress[id];
+        state.aiTriggeredJobs.delete(id);
       setHeaderProgress("", 0, { hide: true });
 
       if (job.status === "done") {
@@ -610,7 +698,28 @@ function watchJobPoll(id) {
           showTranscript(job.transcript, job.ai_results);
           selectJob(id);
         }
-        if (state.autoFixEnabled && job.transcript)
+
+        // Auto-trigger AI processing for this transcript if no AI results
+        // currently exist for the job.
+        try {
+          if ((!job.ai_results || job.ai_results.length === 0) && job.transcript) {
+            // Avoid duplicate triggers from polling fallback
+            if (!state.aiTriggeredJobs.has(id)) {
+              state.aiTriggeredJobs.add(id);
+              // select current mode from selector if available
+              state.currentAIMode = dom.aiModeSelector?.value || state.currentAIMode || Object.keys(state.aiModes || {})[0];
+              updateAiButtonLabel();
+              // Run only the selected mode for this transcript
+              await aiAction(job.transcript, state.currentAIMode);
+            }
+          }
+        } catch (e) {
+          console.warn("Auto AI action failed (poll):", e);
+        }
+
+        // Only run auto-fix if the user has enabled it AND the selected
+        // AI mode is 'grammar' (avoid running multiple modes simultaneously).
+        if (state.autoFixEnabled && job.transcript && state.currentAIMode === 'grammar')
           triggerAutoFix(id, job.transcript);
       } else {
         toast(`Job failed: ${job.error}`, "error");
@@ -628,11 +737,44 @@ function watchJobPoll(id) {
 function showTranscript(text, aiResults) {
   dom.emptyState.style.display = "none";
   dom.processingOverlay.classList.remove("active");
-  dom.editor.style.display = "block";
-  dom.editor.value = text;
-  updateCharCount();
-  setEditorButtons(true);
+  // merge transcript into the chat view as an assistant-labeled message
+  try {
+    // avoid duplicate transcript messages
+    if (dom.chatMessages) {
+      const existing = Array.from(dom.chatMessages.querySelectorAll('.message.assistant'))
+        .some(m => {
+          const lbl = m.querySelector('.message-label')?.textContent?.trim();
+          const body = m.querySelector('.message-body')?.textContent?.trim();
+          return lbl === 'Transcript' && body === (text || '').trim();
+        });
+      if (!existing) appendAssistantMessage(text, "Transcript");
+    } else {
+      // fallback: show in hidden editor if chat area missing
+      dom.editor.style.display = "block";
+      dom.editor.value = text;
+      updateCharCount();
+      setEditorButtons(true);
+    }
+  } catch (e) {
+    dom.editor.style.display = "block";
+    dom.editor.value = text;
+    updateCharCount();
+    setEditorButtons(true);
+  }
+  // also render any AI results into chat
   renderAiResults(aiResults || []);
+}
+
+// Start a new conversation in the chat (clear messages). If `preserve` is true, do not clear.
+function startNewConversation(preserve = false) {
+  if (preserve) return;
+  if (!dom.chatMessages) return;
+  dom.chatMessages.innerHTML = '';
+  // show empty hint
+  const empty = document.createElement('div');
+  empty.className = 'empty-state';
+  empty.innerHTML = '<div class="empty-glyph">◌</div><div class="empty-text">Start a conversation — type below or upload audio to begin</div>';
+  dom.chatMessages.appendChild(empty);
 }
 
 function showProcessing(label, pct = 0) {
@@ -691,6 +833,18 @@ function setEditorButtons(on) {
     dom.btnExport,
   ].forEach((btn) => (btn.disabled = !on));
 }
+// Guarded version used where callers may not expect missing elements
+function setEditorButtonsSafe(on) {
+  [
+    dom.aiModeSelector,
+    dom.btnAi,
+    dom.btnEditVoice,
+    dom.btnCopy,
+    dom.btnExport,
+  ].forEach((btn) => {
+    if (btn) btn.disabled = !on;
+  });
+}
 
 dom.editor.addEventListener("input", updateCharCount);
 function updateCharCount() {
@@ -701,9 +855,22 @@ function updateCharCount() {
 // ─── Toolbar ──────────────────────────────────────────────────────────────────
 
 dom.btnCopy.addEventListener("click", () => {
-  navigator.clipboard
-    .writeText(dom.editor.value)
-    .then(() => toast("Copied!", "success"));
+  // Prefer copying the editor content; if empty, copy the chat messages.
+  let text = dom.editor?.value?.trim() || "";
+  if (!text && dom.chatMessages) {
+    const parts = Array.from(dom.chatMessages.querySelectorAll('.message .message-body'))
+      .map(el => el.textContent?.trim())
+      .filter(Boolean);
+    text = parts.join('\n\n');
+  }
+  if (!text) {
+    toast('Nothing to copy', 'error');
+    return;
+  }
+  navigator.clipboard.writeText(text).then(() => toast('Copied!', 'success')).catch((e) => {
+    console.error('Copy failed', e);
+    toast('Copy failed', 'error');
+  });
 });
 
 dom.btnExport.addEventListener("click", () => {
@@ -732,125 +899,116 @@ function escHtml(str) {
   );
 }
 
-const AI_EMPTY_HTML = `
-  <div class="ai-empty-state">
-    <div class="ai-empty-glyph">✦</div>
-    <div class="ai-empty-text">Summarize or auto-fix your transcript to see results here</div>
-  </div>`;
+// Chat helpers (append messages to the new chat view)
+function appendUserMessage(text) {
+  if (!dom.chatMessages) return;
+  dom.chatMessages.querySelectorAll('.empty-state')?.forEach(e => e.remove());
+  const el = document.createElement('div');
+  el.className = 'message user';
+  const body = document.createElement('div');
+  body.className = 'message-body';
+  body.textContent = text;
+  el.appendChild(body);
+  dom.chatMessages.appendChild(el);
+  dom.chatMessages.scrollTop = dom.chatMessages.scrollHeight;
+}
 
-function renderAiResults(aiResults) {
-  dom.aiResultsPanel.innerHTML = "";
-
-  if (!aiResults?.length) {
-    dom.aiResultsPanel.innerHTML = AI_EMPTY_HTML;
-    return;
+/**
+ * Append an assistant message bubble.
+ * @param {string} text initial content
+ * @param {string} [label] optional label (e.g. grammar, summarize)
+ * @returns {{el:HTMLElement, body:HTMLElement}} elements for later updates
+ */
+function appendAssistantMessage(text, label) {
+  if (!dom.chatMessages) return {};
+  dom.chatMessages.querySelectorAll('.empty-state')?.forEach(e => e.remove());
+  const el = document.createElement('div');
+  el.className = 'message assistant';
+  if (label) {
+    const lbl = document.createElement('div');
+    lbl.className = 'message-label';
+    lbl.textContent = label;
+    el.appendChild(lbl);
   }
+  const body = document.createElement('div');
+  body.className = 'message-body';
+  body.textContent = text;
+  el.appendChild(body);
 
-  const sorted = [...aiResults]
-    .map((r, originalIdx) => ({ ...r, originalIdx }))
-    .sort((a, b) => {
-      if (a.mode === b.mode) return b.created_at - a.created_at;
-      // modes not same: follow configured order if available
-      const order = state.aiModeOrder || [];
-      const ia = order.indexOf(a.mode);
-      const ib = order.indexOf(b.mode);
-      if (ia !== -1 && ib !== -1 && ia !== ib) return ia - ib;
-      if (ia !== -1 && ib === -1) return -1;
-      if (ib !== -1 && ia === -1) return 1;
-      return a.mode.localeCompare(b.mode);
-    });
-
-  sorted.forEach((r) => {
-    const info = state.aiModes[r.mode] || {};
-    const label = info.display_name || r.mode;
-    let badgeCls = "badge-custom";
-    if (r.mode === "summarize") badgeCls = "badge-summarize";
-    else if (r.mode === "grammar") badgeCls = "badge-grammar";
-    const timeStr = new Date(r.created_at * 1000).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-    const block = document
-      .getElementById("tpl-ai-result")
-      .content.cloneNode(true)
-      .querySelector(".ai-result-block");
-    if (r._temp) {
-      block.dataset.temp = "1";
+  // Add per-message actions (copy)
+  const actions = document.createElement('div');
+  actions.className = 'message-actions';
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'btn btn-ghost msg-copy-btn';
+  copyBtn.title = 'Copy message';
+  copyBtn.innerText = '⎘';
+  copyBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const txt = body.textContent || '';
+    if (!txt.trim()) {
+      toast('Nothing to copy', 'error');
+      return;
     }
-    const badge = block.querySelector(".ai-result-badge");
-    badge.textContent = label;
-    badge.className = `ai-result-badge ${badgeCls}`;
-    block.querySelector(".ai-result-time").textContent = timeStr;
-    block.querySelector(".ai-result-body").textContent = r.text; // textContent = no XSS risk, no need for escHtml
-    block.querySelector(".ai-result-progress-fill").style.width =
-      (r.progress || 0) + "%";
+    navigator.clipboard.writeText(txt).then(() => toast('Copied message', 'success')).catch(() => toast('Copy failed', 'error'));
+  });
+  actions.appendChild(copyBtn);
+  el.appendChild(actions);
+  dom.chatMessages.appendChild(el);
+  dom.chatMessages.scrollTop = dom.chatMessages.scrollHeight;
+  return { el, body };
+}
 
-    block.querySelector(".ai-result-header").addEventListener("click", (e) => {
-      if (e.target.classList.contains("ai-result-delete")) return;
-      block.querySelector(".ai-result-body").classList.toggle("collapsed");
-      block.querySelector(".ai-result-actions").classList.toggle("collapsed");
-    });
+// helper for streaming tokens
+function createAssistantPlaceholder(label) {
+  return appendAssistantMessage("", label);
+}
 
-    block.querySelector(".ai-copy-btn").addEventListener("click", () => {
-      navigator.clipboard
-        .writeText(r.text)
-        .then(() => toast("Copied!", "success"));
-    });
+// Merge AI results into chat instead of separate right-side panel
+function renderAiResults(aiResults) {
+  // clear right-panel to avoid clutter (panel may be hidden anyway)
+  if (dom.aiResultsPanel) dom.aiResultsPanel.innerHTML = "";
+  if (!aiResults || !aiResults.length) return;
 
-    block.querySelector(".ai-export-btn").addEventListener("click", () => {
-      const lbl = isGrammar ? "Grammar-Fix" : "Summary";
-      downloadMarkdown(`${lbl.toLowerCase()}.md`, `# ${lbl}\n\n${r.text}\n`);
-      toast(`Exported ${lbl}`, "success");
-    });
-
-    block
-      .querySelector(".ai-result-delete")
-      .addEventListener("click", async (e) => {
-        e.stopPropagation();
-        if (!state.activeJobId) return;
-        const res = await fetch(
-          `/api/jobs/${state.activeJobId}/ai/${r.originalIdx}`,
-          {
-            method: "DELETE",
-          },
-        );
-        if (res.ok) {
-          const data = await res.json();
-          renderAiResults(data.ai_results);
-          toast("Deleted", "success");
-        }
-      });
-
-    dom.aiResultsPanel.appendChild(block);
+  aiResults.forEach((r) => {
+    if (!r.text) return;
+    const label = (state.aiModes[r.mode] || {}).display_name || r.mode;
+    // avoid duplicates by checking text content
+    const existing = Array.from((dom.chatMessages || document.createElement('div')).querySelectorAll('.message.assistant .message-body'))
+      .some(m => m.textContent && m.textContent.trim() === r.text.trim() &&
+                  m.previousSibling?.textContent === label);
+    if (!existing) appendAssistantMessage(r.text, label);
   });
 }
 
-async function aiAction() {
-  const text = dom.editor.value;
-  if (!text.trim()) return;
 
-  const mode = state.currentAIMode;
+
+async function aiAction(overrideText = null, overrideMode = null) {
+  // Determine text: explicit override wins, otherwise prefer chat input then editor
+  const inputText = overrideText ?? ((dom.chatInput && dom.chatInput.value.trim()) || dom.editor.value);
+  if (!inputText || !inputText.trim()) return;
+
+  // Only append a user message when this was triggered from the chat input (not from an override)
+  if (!overrideText && dom.chatInput && dom.chatInput.value.trim()) {
+    appendUserMessage(dom.chatInput.value.trim());
+    dom.chatInput.value = "";
+  }
+
+  const text = inputText;
+  // Mode selection: explicit override, then selector, then current state
+  const mode = overrideMode || dom.aiModeSelector?.value || state.currentAIMode;
   const btn = dom.btnAi;
   const origText = btn.textContent;
   btn.disabled = true;
   btn.textContent = "…";
+  if (dom.chatInput) dom.chatInput.disabled = true;
+  if (dom.chatSend) dom.chatSend.disabled = true;
 
-  const tempResult = {
-    mode: mode,
-    text: "",
-    created_at: Math.floor(Date.now() / 1000),
-    progress: 0,
-    _temp: true,
-  };
-
-  // initial render + grab references for updates
-  renderAiResults([tempResult]);
-  const tempElem = dom.aiResultsPanel.querySelector(".ai-result-block[data-temp]");
-  const bodyEl = tempElem?.querySelector(".ai-result-body");
-  const progFill = tempElem?.querySelector(".ai-result-progress-fill");
-
+  // insert a placeholder chat message so we can stream tokens into it
   const modeLabel = state.aiModes[mode]?.display_name || mode;
+  const placeholder = createAssistantPlaceholder(modeLabel);
+  const bodyEl = placeholder.body; // will be updated as tokens arrive
+  // we no longer render temporary results in the side panel
+
   setHeaderProgress(`${modeLabel}…`, 10, { aiMode: true });
 
   try {
@@ -868,17 +1026,10 @@ async function aiAction() {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let fullText = "";
-    let fakeProgress = 10;
-
-    const fakeInterval = setInterval(() => {
-      fakeProgress = Math.min(fakeProgress + 3, 90);
-      if (progFill) progFill.style.width = fakeProgress + "%";
-    }, 300);
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-
       const chunk = decoder.decode(value, { stream: true });
       const lines = chunk.split("\n");
 
@@ -888,7 +1039,6 @@ async function aiAction() {
             const data = JSON.parse(line.slice(6));
 
             if (data.error) {
-              clearInterval(fakeInterval);
               throw new Error(data.error);
             }
 
@@ -898,11 +1048,11 @@ async function aiAction() {
             }
 
             if (data.done) {
-              clearInterval(fakeInterval);
+              // no fake interval to clear
               fullText = data.text || fullText;
               if (bodyEl) bodyEl.textContent = fullText;
-              if (progFill) progFill.style.width = "100%";
               setHeaderProgress("Complete", 100, { aiMode: true });
+              // placeholder already contains fullText
             }
           } catch (e) {
             continue;
@@ -911,9 +1061,9 @@ async function aiAction() {
       }
     }
 
-    clearInterval(fakeInterval);
+    // refresh side-panel results for persistence (chat duplicate check will prevent repeats)
     await refreshAiPanel();
-    toast(`${state.aiModes[mode]?.display_name || mode} saved`, "success");
+    toast(`${modeLabel} saved`, "success");
     setTimeout(() => setHeaderProgress("", 0, { hide: true }), 1500);
   } catch (e) {
     setHeaderProgress("", 0, { hide: true });
@@ -923,6 +1073,8 @@ async function aiAction() {
     btn.disabled = false;
     btn.textContent = origText;
     setEditorButtons(true);
+    if (dom.chatInput) dom.chatInput.disabled = false;
+    if (dom.chatSend) dom.chatSend.disabled = false;
   }
 }
 
@@ -932,6 +1084,7 @@ async function refreshAiPanel() {
   if (!state.activeJobId) return;
   const res = await fetch(`/api/status/${state.activeJobId}`);
   const job = await res.json();
+  // render results into chat, side panel may not exist
   renderAiResults(job.ai_results || []);
 }
 
@@ -979,9 +1132,22 @@ async function triggerAutoFix(jobId, transcript) {
   };
 
   renderAiResults([tempResult]);
-  const tempElem = dom.aiResultsPanel.querySelector(".ai-result-block[data-temp]");
-  const bodyEl = tempElem?.querySelector(".ai-result-body");
-  const progFill = tempElem?.querySelector(".ai-result-progress-fill");
+  // Try to find the temporary element in the ai results panel; if that panel
+  // is not present (chat-first UI), fall back to creating a chat placeholder
+  // assistant message and stream into it instead.
+  let tempElem = null;
+  let bodyEl = null;
+  let progFill = null;
+  if (dom.aiResultsPanel) {
+    tempElem = dom.aiResultsPanel.querySelector(".ai-result-block[data-temp]");
+    bodyEl = tempElem?.querySelector(".ai-result-body");
+    progFill = tempElem?.querySelector(".ai-result-progress-fill");
+  }
+  if (!bodyEl) {
+    const placeholder = appendAssistantMessage("", "Grammar");
+    bodyEl = placeholder.body;
+    progFill = null; // no progress bar in chat placeholder
+  }
 
   setHeaderProgress("Auto-fixing", 10, { aiMode: true });
 
@@ -1330,18 +1496,56 @@ async function init() {
     updateAiButtonLabel();
   });
 
-  try {
-    const res = await fetch("/api/jobs");
-    const list = await res.json();
-    [...list].reverse().forEach((job) => {
-      addJob(job);
-      if (job.status !== "done" && job.status !== "error") watchJob(job.id);
-    });
-    const done = list.find((j) => j.status === "done");
-    if (done) selectJob(done.id);
-  } catch {
-    /* server not ready */
+  // jobs list now optional (left panel removed)
+  if (dom.jobsList) {
+    try {
+      const res = await fetch("/api/jobs");
+      const list = await res.json();
+      [...list].reverse().forEach((job) => {
+        addJob(job);
+        if (job.status !== "done" && job.status !== "error") watchJob(job.id);
+      });
+      const done = list.find((j) => j.status === "done");
+      if (done) selectJob(done.id);
+    } catch {
+      /* server not ready */
+    }
   }
 }
 
 init();
+
+// Chat input wiring: send on button or Enter (Shift+Enter for newline)
+if (dom.chatSend) {
+  dom.chatSend.addEventListener('click', () => {
+    const t = dom.chatInput?.value?.trim();
+    if (t) {
+      // use editor value path so aiAction works unchanged
+      dom.editor.value = t;
+      aiAction();
+    }
+  });
+}
+
+if (dom.chatInput) {
+  dom.chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const t = dom.chatInput.value.trim();
+      if (!t) return;
+      dom.editor.value = t;
+      aiAction();
+    }
+  });
+}
+
+// Jobs drawer toggle wiring
+if (dom.btnToggleJobsDrawer && dom.jobsDrawer) {
+  const openDrawer = () => dom.jobsDrawer.classList.add('open');
+  const closeDrawer = () => dom.jobsDrawer.classList.remove('open');
+  dom.btnToggleJobsDrawer.addEventListener('click', () => {
+    dom.jobsDrawer.classList.toggle('open');
+  });
+  if (dom.jobsDrawerBackdrop) dom.jobsDrawerBackdrop.addEventListener('click', closeDrawer);
+  if (dom.jobsDrawerClose) dom.jobsDrawerClose.addEventListener('click', closeDrawer);
+}
