@@ -94,6 +94,12 @@ const dom = {
   modeInstructionInput: document.getElementById("mode-instruction-input"),
   modeRulesInput: document.getElementById("mode-rules-input"),
   modePlaceholderInput: document.getElementById("mode-placeholder-input"),
+  // Chat UI elements (new)
+  chatMessages: document.getElementById("chat-messages"),
+  chatInput: document.getElementById("chat-input"),
+  chatSend: document.getElementById("chat-send"),
+  chatRecordBtn: document.getElementById("chat-record-btn"),
+  chatAppendBtn: document.getElementById("chat-append-btn"),
 };
 
 const ctx2d = dom.waveformCanvas.getContext("2d");
@@ -202,6 +208,8 @@ function mimeToExt(mimeType) {
 
 dom.recordBtn.addEventListener("click", toggleRecord);
 dom.appendBtn.addEventListener("click", toggleAppendRecord);
+if (dom.chatRecordBtn) dom.chatRecordBtn.addEventListener("click", toggleRecord);
+if (dom.chatAppendBtn) dom.chatAppendBtn.addEventListener("click", toggleAppendRecord);
 
 async function toggleAppendRecord() {
   if (!state.activeJobId) {
@@ -263,7 +271,9 @@ async function startRecording(isAppend = false) {
   state.recordStart = Date.now();
   state.timerInterval = setInterval(updateTimer, 500);
   dom.recordBtn.classList.add("recording");
+  if (dom.chatRecordBtn) dom.chatRecordBtn.classList.add("recording");
   dom.appendBtn.classList.toggle("recording", isAppend);
+  if (dom.chatAppendBtn) dom.chatAppendBtn.classList.toggle("recording", isAppend);
   dom.statusEl.textContent = isAppend
     ? "Appending… click to stop"
     : "Recording… click to stop";
@@ -276,7 +286,9 @@ function stopRecording() {
   clearInterval(state.timerInterval);
   cancelAnimationFrame(state.animFrame);
   dom.recordBtn.classList.remove("recording");
+  if (dom.chatRecordBtn) dom.chatRecordBtn.classList.remove("recording");
   dom.appendBtn.classList.remove("recording");
+  if (dom.chatAppendBtn) dom.chatAppendBtn.classList.remove("recording");
   dom.statusEl.textContent = "Uploading…";
   dom.statusEl.classList.remove("active");
   dom.timerEl.textContent = "";
@@ -444,9 +456,11 @@ function updateJobEl(job) {
 }
 
 function selectJob(id) {
-  dom.jobsList
-    .querySelectorAll(".job-item")
-    .forEach((e) => e.classList.remove("active"));
+  if (dom.jobsList) {
+    dom.jobsList
+      .querySelectorAll(".job-item")
+      .forEach((e) => e.classList.remove("active"));
+  }
   state.jobElements.get(id)?.classList.add("active");
   state.activeJobId = id;
 
@@ -732,125 +746,96 @@ function escHtml(str) {
   );
 }
 
-const AI_EMPTY_HTML = `
-  <div class="ai-empty-state">
-    <div class="ai-empty-glyph">✦</div>
-    <div class="ai-empty-text">Summarize or auto-fix your transcript to see results here</div>
-  </div>`;
+// Chat helpers (append messages to the new chat view)
+function appendUserMessage(text) {
+  if (!dom.chatMessages) return;
+  dom.chatMessages.querySelectorAll('.empty-state')?.forEach(e => e.remove());
+  const el = document.createElement('div');
+  el.className = 'message user';
+  const body = document.createElement('div');
+  body.className = 'message-body';
+  body.textContent = text;
+  el.appendChild(body);
+  dom.chatMessages.appendChild(el);
+  dom.chatMessages.scrollTop = dom.chatMessages.scrollHeight;
+}
 
-function renderAiResults(aiResults) {
-  dom.aiResultsPanel.innerHTML = "";
-
-  if (!aiResults?.length) {
-    dom.aiResultsPanel.innerHTML = AI_EMPTY_HTML;
-    return;
+/**
+ * Append an assistant message bubble.
+ * @param {string} text initial content
+ * @param {string} [label] optional label (e.g. grammar, summarize)
+ * @returns {{el:HTMLElement, body:HTMLElement}} elements for later updates
+ */
+function appendAssistantMessage(text, label) {
+  if (!dom.chatMessages) return {};
+  dom.chatMessages.querySelectorAll('.empty-state')?.forEach(e => e.remove());
+  const el = document.createElement('div');
+  el.className = 'message assistant';
+  if (label) {
+    const lbl = document.createElement('div');
+    lbl.className = 'message-label';
+    lbl.textContent = label;
+    el.appendChild(lbl);
   }
+  const body = document.createElement('div');
+  body.className = 'message-body';
+  body.textContent = text;
+  el.appendChild(body);
+  dom.chatMessages.appendChild(el);
+  dom.chatMessages.scrollTop = dom.chatMessages.scrollHeight;
+  return { el, body };
+}
 
-  const sorted = [...aiResults]
-    .map((r, originalIdx) => ({ ...r, originalIdx }))
-    .sort((a, b) => {
-      if (a.mode === b.mode) return b.created_at - a.created_at;
-      // modes not same: follow configured order if available
-      const order = state.aiModeOrder || [];
-      const ia = order.indexOf(a.mode);
-      const ib = order.indexOf(b.mode);
-      if (ia !== -1 && ib !== -1 && ia !== ib) return ia - ib;
-      if (ia !== -1 && ib === -1) return -1;
-      if (ib !== -1 && ia === -1) return 1;
-      return a.mode.localeCompare(b.mode);
-    });
+// helper for streaming tokens
+function createAssistantPlaceholder(label) {
+  return appendAssistantMessage("", label);
+}
 
-  sorted.forEach((r) => {
-    const info = state.aiModes[r.mode] || {};
-    const label = info.display_name || r.mode;
-    let badgeCls = "badge-custom";
-    if (r.mode === "summarize") badgeCls = "badge-summarize";
-    else if (r.mode === "grammar") badgeCls = "badge-grammar";
-    const timeStr = new Date(r.created_at * 1000).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+// Merge AI results into chat instead of separate right-side panel
+function renderAiResults(aiResults) {
+  // clear right-panel to avoid clutter (panel may be hidden anyway)
+  if (dom.aiResultsPanel) dom.aiResultsPanel.innerHTML = "";
+  if (!aiResults || !aiResults.length) return;
 
-    const block = document
-      .getElementById("tpl-ai-result")
-      .content.cloneNode(true)
-      .querySelector(".ai-result-block");
-    if (r._temp) {
-      block.dataset.temp = "1";
-    }
-    const badge = block.querySelector(".ai-result-badge");
-    badge.textContent = label;
-    badge.className = `ai-result-badge ${badgeCls}`;
-    block.querySelector(".ai-result-time").textContent = timeStr;
-    block.querySelector(".ai-result-body").textContent = r.text; // textContent = no XSS risk, no need for escHtml
-    block.querySelector(".ai-result-progress-fill").style.width =
-      (r.progress || 0) + "%";
-
-    block.querySelector(".ai-result-header").addEventListener("click", (e) => {
-      if (e.target.classList.contains("ai-result-delete")) return;
-      block.querySelector(".ai-result-body").classList.toggle("collapsed");
-      block.querySelector(".ai-result-actions").classList.toggle("collapsed");
-    });
-
-    block.querySelector(".ai-copy-btn").addEventListener("click", () => {
-      navigator.clipboard
-        .writeText(r.text)
-        .then(() => toast("Copied!", "success"));
-    });
-
-    block.querySelector(".ai-export-btn").addEventListener("click", () => {
-      const lbl = isGrammar ? "Grammar-Fix" : "Summary";
-      downloadMarkdown(`${lbl.toLowerCase()}.md`, `# ${lbl}\n\n${r.text}\n`);
-      toast(`Exported ${lbl}`, "success");
-    });
-
-    block
-      .querySelector(".ai-result-delete")
-      .addEventListener("click", async (e) => {
-        e.stopPropagation();
-        if (!state.activeJobId) return;
-        const res = await fetch(
-          `/api/jobs/${state.activeJobId}/ai/${r.originalIdx}`,
-          {
-            method: "DELETE",
-          },
-        );
-        if (res.ok) {
-          const data = await res.json();
-          renderAiResults(data.ai_results);
-          toast("Deleted", "success");
-        }
-      });
-
-    dom.aiResultsPanel.appendChild(block);
+  aiResults.forEach((r) => {
+    if (!r.text) return;
+    const label = (state.aiModes[r.mode] || {}).display_name || r.mode;
+    // avoid duplicates by checking text content
+    const existing = Array.from((dom.chatMessages || document.createElement('div')).querySelectorAll('.message.assistant .message-body'))
+      .some(m => m.textContent && m.textContent.trim() === r.text.trim() &&
+                  m.previousSibling?.textContent === label);
+    if (!existing) appendAssistantMessage(r.text, label);
   });
 }
 
-async function aiAction() {
-  const text = dom.editor.value;
-  if (!text.trim()) return;
 
+
+async function aiAction() {
+  // Support chat input: prefer `chatInput` if present, otherwise use editor
+  const inputText = (dom.chatInput && dom.chatInput.value.trim()) || dom.editor.value;
+  if (!inputText || !inputText.trim()) return;
+
+  // if chat input exists, append user message for a conversational feel
+  if (dom.chatInput && dom.chatInput.value.trim()) {
+    appendUserMessage(dom.chatInput.value.trim());
+    dom.chatInput.value = "";
+  }
+
+  const text = inputText;
   const mode = state.currentAIMode;
   const btn = dom.btnAi;
   const origText = btn.textContent;
   btn.disabled = true;
   btn.textContent = "…";
+  if (dom.chatInput) dom.chatInput.disabled = true;
+  if (dom.chatSend) dom.chatSend.disabled = true;
 
-  const tempResult = {
-    mode: mode,
-    text: "",
-    created_at: Math.floor(Date.now() / 1000),
-    progress: 0,
-    _temp: true,
-  };
-
-  // initial render + grab references for updates
-  renderAiResults([tempResult]);
-  const tempElem = dom.aiResultsPanel.querySelector(".ai-result-block[data-temp]");
-  const bodyEl = tempElem?.querySelector(".ai-result-body");
-  const progFill = tempElem?.querySelector(".ai-result-progress-fill");
-
+  // insert a placeholder chat message so we can stream tokens into it
   const modeLabel = state.aiModes[mode]?.display_name || mode;
+  const placeholder = createAssistantPlaceholder(modeLabel);
+  const bodyEl = placeholder.body; // will be updated as tokens arrive
+  // we no longer render temporary results in the side panel
+
   setHeaderProgress(`${modeLabel}…`, 10, { aiMode: true });
 
   try {
@@ -868,17 +853,10 @@ async function aiAction() {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let fullText = "";
-    let fakeProgress = 10;
-
-    const fakeInterval = setInterval(() => {
-      fakeProgress = Math.min(fakeProgress + 3, 90);
-      if (progFill) progFill.style.width = fakeProgress + "%";
-    }, 300);
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-
       const chunk = decoder.decode(value, { stream: true });
       const lines = chunk.split("\n");
 
@@ -898,11 +876,11 @@ async function aiAction() {
             }
 
             if (data.done) {
-              clearInterval(fakeInterval);
+              // no fake interval to clear
               fullText = data.text || fullText;
               if (bodyEl) bodyEl.textContent = fullText;
-              if (progFill) progFill.style.width = "100%";
               setHeaderProgress("Complete", 100, { aiMode: true });
+              // placeholder already contains fullText
             }
           } catch (e) {
             continue;
@@ -912,8 +890,9 @@ async function aiAction() {
     }
 
     clearInterval(fakeInterval);
+    // refresh side-panel results for persistence (chat duplicate check will prevent repeats)
     await refreshAiPanel();
-    toast(`${state.aiModes[mode]?.display_name || mode} saved`, "success");
+    toast(`${modeLabel} saved`, "success");
     setTimeout(() => setHeaderProgress("", 0, { hide: true }), 1500);
   } catch (e) {
     setHeaderProgress("", 0, { hide: true });
@@ -923,6 +902,8 @@ async function aiAction() {
     btn.disabled = false;
     btn.textContent = origText;
     setEditorButtons(true);
+    if (dom.chatInput) dom.chatInput.disabled = false;
+    if (dom.chatSend) dom.chatSend.disabled = false;
   }
 }
 
@@ -932,6 +913,7 @@ async function refreshAiPanel() {
   if (!state.activeJobId) return;
   const res = await fetch(`/api/status/${state.activeJobId}`);
   const job = await res.json();
+  // render results into chat, side panel may not exist
   renderAiResults(job.ai_results || []);
 }
 
@@ -1330,18 +1312,45 @@ async function init() {
     updateAiButtonLabel();
   });
 
-  try {
-    const res = await fetch("/api/jobs");
-    const list = await res.json();
-    [...list].reverse().forEach((job) => {
-      addJob(job);
-      if (job.status !== "done" && job.status !== "error") watchJob(job.id);
-    });
-    const done = list.find((j) => j.status === "done");
-    if (done) selectJob(done.id);
-  } catch {
-    /* server not ready */
+  // jobs list now optional (left panel removed)
+  if (dom.jobsList) {
+    try {
+      const res = await fetch("/api/jobs");
+      const list = await res.json();
+      [...list].reverse().forEach((job) => {
+        addJob(job);
+        if (job.status !== "done" && job.status !== "error") watchJob(job.id);
+      });
+      const done = list.find((j) => j.status === "done");
+      if (done) selectJob(done.id);
+    } catch {
+      /* server not ready */
+    }
   }
 }
 
 init();
+
+// Chat input wiring: send on button or Enter (Shift+Enter for newline)
+if (dom.chatSend) {
+  dom.chatSend.addEventListener('click', () => {
+    const t = dom.chatInput?.value?.trim();
+    if (t) {
+      // use editor value path so aiAction works unchanged
+      dom.editor.value = t;
+      aiAction();
+    }
+  });
+}
+
+if (dom.chatInput) {
+  dom.chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const t = dom.chatInput.value.trim();
+      if (!t) return;
+      dom.editor.value = t;
+      aiAction();
+    }
+  });
+}

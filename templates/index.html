@@ -37,65 +37,7 @@
     </header>
 
     <div class="layout flex h-full">
-      <!-- ── LEFT PANEL ──────────────────────────────────── -->
-      <aside class="panel-left w-60 bg-[var(--surface2)] p-3 overflow-y-auto">
-        <div class="section mb-4">
-          <div class="section-label flex items-center" id="toggle-record">
-            <span class="toggle-icon">▾</span>
-            <span class="ml-1">Record Audio</span>
-          </div>
-          <div class="section-body" id="body-record">
-            <div class="record-area">
-              <button
-                class="record-btn w-10 h-10 rounded-full bg-[var(--accent)] flex items-center justify-center"
-                id="record-btn"
-                title="Click to record"
-              >
-                <div class="dot"></div>
-              </button>
-              <button
-                class="record-btn append-btn w-10 h-10 rounded-full bg-[var(--accent2)] flex items-center justify-center"
-                id="append-btn"
-                title="Append to last recording"
-              >
-                <span class="append-icon">+</span>
-              </button>
-              <div class="timer" id="timer"></div>
-              <span class="record-status" id="record-status"
-                >Click to start recording</span
-              >
-              <canvas id="waveform"></canvas>
-            </div>
-          </div>
-        </div>
-
-        <div class="section">
-          <div class="section-label" id="toggle-upload">
-            <span class="toggle-icon">▾</span>
-            Upload File
-          </div>
-          <div class="section-body" id="body-upload">
-            <div class="upload-zone" id="upload-zone">
-              <input type="file" id="file-input" accept="audio/*,video/*" />
-              <div class="upload-icon">⬆</div>
-              <div style="font-size: 0.82rem">
-                Drop audio or video file here
-              </div>
-              <div class="upload-hint">mp3, wav, flac, m4a, mp4, mkv, mov…</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="jobs-section-header">
-          <div class="jobs-section-label" id="toggle-jobs">
-            <span class="toggle-icon">▾</span>
-            Jobs
-          </div>
-        </div>
-        <div class="jobs-list collapsed" id="jobs-list"></div>
-      </aside>
-
-      <!-- ── CENTER PANEL ──────────────────────────────────── -->
+      <!-- ── MAIN PANEL (chat) ──────────────────────────────────── -->
       <main class="panel-center flex-1 bg-[var(--surface)] p-4">
         <div class="editor-toolbar flex items-center space-x-2 mb-2">
           <select id="ai-mode-selector" class="mode-selector" disabled></select>
@@ -118,15 +60,32 @@
         </div>
 
         <div class="editor-area relative">
-          <div class="empty-state" id="empty-state">
-            <div class="empty-glyph">◌</div>
-            <div class="empty-text">Record audio or upload a file to begin</div>
+          <!-- Simplified chat-style UI -->
+          <div class="chat-container">
+            <div class="chat-messages" id="chat-messages">
+              <div class="empty-state" id="empty-state">
+                <div class="empty-glyph">◌</div>
+                <div class="empty-text">Start a conversation — type below or upload audio to begin</div>
+              </div>
+            </div>
+
+            <div class="chat-input-row">
+              <button class="chat-record-btn" id="chat-record-btn" title="Record">
+                <span class="dot-small">●</span>
+              </button>
+              <button class="chat-append-btn" id="chat-append-btn" title="Append to last">
+                +
+              </button>
+              <textarea id="chat-input" placeholder="Send a message (Enter to send, Shift+Enter for newline)" rows="1"></textarea>
+              <button class="btn btn-primary" id="chat-send">Send</button>
+            </div>
           </div>
 
           <textarea
             id="transcript-editor"
             spellcheck="true"
             placeholder="Transcript will appear here…"
+            style="display:none"
           ></textarea>
 
           <div class="processing-overlay" id="processing-overlay">
@@ -147,12 +106,6 @@
           </div>
         </div>
       </main>
-
-      <!-- ── RIGHT PANEL ──────────────────────────────────── -->
-      <aside class="panel-right w-64 bg-[var(--surface2)] p-3 border-l border-[var(--border)] overflow-y-auto">
-        <div class="panel-right-header text-lg font-semibold mb-2">AI Results</div>
-        <div class="ai-results-panel" id="ai-results"></div>
-      </aside>
     </div>
 
     <div id="toast-container"></div>
