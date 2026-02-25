@@ -102,7 +102,7 @@ const dom = {
   chatAppendBtn: document.getElementById("chat-append-btn"),
 };
 
-const ctx2d = dom.waveformCanvas.getContext("2d");
+const ctx2d = dom.waveformCanvas ? dom.waveformCanvas.getContext("2d") : null;
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 
@@ -206,8 +206,8 @@ function mimeToExt(mimeType) {
   return "webm";
 }
 
-dom.recordBtn.addEventListener("click", toggleRecord);
-dom.appendBtn.addEventListener("click", toggleAppendRecord);
+if (dom.recordBtn) dom.recordBtn.addEventListener("click", toggleRecord);
+if (dom.appendBtn) dom.appendBtn.addEventListener("click", toggleAppendRecord);
 if (dom.chatRecordBtn) dom.chatRecordBtn.addEventListener("click", toggleRecord);
 if (dom.chatAppendBtn) dom.chatAppendBtn.addEventListener("click", toggleAppendRecord);
 
@@ -292,7 +292,7 @@ function stopRecording() {
   dom.statusEl.textContent = "Uploading…";
   dom.statusEl.classList.remove("active");
   dom.timerEl.textContent = "";
-  ctx2d.clearRect(0, 0, dom.waveformCanvas.width, dom.waveformCanvas.height);
+  if (ctx2d && dom.waveformCanvas) ctx2d.clearRect(0, 0, dom.waveformCanvas.width, dom.waveformCanvas.height);
 }
 
 async function submitRecording() {
@@ -348,6 +348,7 @@ function updateTimer() {
 }
 
 function drawWaveform() {
+  if (!ctx2d || !dom.waveformCanvas || !state.analyser) return;
   state.animFrame = requestAnimationFrame(drawWaveform);
   const data = new Uint8Array(state.analyser.frequencyBinCount);
   state.analyser.getByteTimeDomainData(data);
@@ -369,21 +370,25 @@ function drawWaveform() {
 
 // ─── File Upload ──────────────────────────────────────────────────────────────
 
-dom.fileInput.addEventListener("change", (e) => {
-  if (e.target.files[0]) uploadFile(e.target.files[0]);
-});
-dom.uploadZone.addEventListener("dragover", (e) => {
-  e.preventDefault();
-  dom.uploadZone.classList.add("drag-over");
-});
-dom.uploadZone.addEventListener("dragleave", () =>
-  dom.uploadZone.classList.remove("drag-over"),
-);
-dom.uploadZone.addEventListener("drop", (e) => {
-  e.preventDefault();
-  dom.uploadZone.classList.remove("drag-over");
-  if (e.dataTransfer.files[0]) uploadFile(e.dataTransfer.files[0]);
-});
+if (dom.fileInput) {
+  dom.fileInput.addEventListener("change", (e) => {
+    if (e.target.files[0]) uploadFile(e.target.files[0]);
+  });
+}
+if (dom.uploadZone) {
+  dom.uploadZone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    dom.uploadZone.classList.add("drag-over");
+  });
+  dom.uploadZone.addEventListener("dragleave", () =>
+    dom.uploadZone.classList.remove("drag-over"),
+  );
+  dom.uploadZone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dom.uploadZone.classList.remove("drag-over");
+    if (e.dataTransfer.files[0]) uploadFile(e.dataTransfer.files[0]);
+  });
+}
 
 async function uploadFile(file) {
   const fd = new FormData();
