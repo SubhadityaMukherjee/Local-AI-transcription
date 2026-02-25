@@ -115,9 +115,36 @@ h1 {
   min-width: 80px;
 }
 
-/* Header toggle */
+/* Header toggle wrapper */
 .header-toggle {
   margin-left: auto;
+}
+
+/* small toggle button used for auto-fix setting */
+.btn-toggle {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--surface2);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+.btn-toggle.active {
+  background: var(--green);
+  color: var(--bg);
+}
+
+/* toolbar mode selector */
+.mode-selector {
+  padding: 0.35rem 0.6rem;
+  font-size: 0.95rem;
+  border: 1px solid var(--surface2);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  margin-right: 0.5rem;
+}
 }
 
 .toggle-label {
@@ -507,11 +534,11 @@ canvas#waveform {
 }
 
 .job-name {
-  font-size: 0.78rem;
+  font-size: 0.65rem;
   font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* allow wrapping so long filenames stay legible */
+  white-space: normal;
+  word-break: break-word;
   margin-bottom: 0.25rem;
 }
 
@@ -557,7 +584,8 @@ canvas#waveform {
   left: 0;
   height: 2px;
   background: var(--accent2);
-  transition: width 0.5s ease;
+  /* remove transition so width changes immediately and reflects actual progress */
+  transition: none;
 }
 
 .job-download {
@@ -788,7 +816,7 @@ canvas#waveform {
 
 .progress-pct {
   font-family: var(--mono);
-  font-size: 0.72rem;
+  font-size: 0.60rem;
   color: var(--accent);
 }
 
@@ -961,6 +989,10 @@ canvas#waveform {
 .badge-grammar {
   background: rgba(92, 224, 138, 0.1);
   color: var(--green);
+}
+.badge-custom {
+  background: rgba(200, 200, 200, 0.08);
+  color: var(--muted);
 }
 
 .ai-result-time {

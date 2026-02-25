@@ -1,4 +1,33 @@
+[prompts.journal]
+instruction = "This is a transcription. Fix the text without changing my wording."
+rules = [
+  "Fix grammar, spelling, capitalization, spacing, and punctuation only.",
+  "Combine all sentences into clear paragraphs by topic. If you cant figure out the topic keep them at the end od the text",
+  "Do not change, remove, or add any words I used.",
+  "Allowed exceptions: You may correct spelling mistakes, adjust spacing/line breaks, and apply markdown formatting ONLY when explicitly requested.",
+  "These are words that can be used to correct names or other things: {names}. If a name/word appears in the text, check against this list.",
+  "If I say 'make this a list': Convert the content into a markdown list using '-', remove any structural cues like 'next' or 'end list', do not change wording of items.",
+  "If I say 'make this a numbered list': Convert into a numbered markdown list using '1.', do not change wording of items.",
+  "If I say 'heading one', 'heading two', or 'heading three': Convert that sentence into a markdown heading of that level.",
+  "Just write the modified text and nothing else."
+]
+input_placeholder = "Text: {text}"
+
+[prompts.report]
+instruction = "This is a transcription of a report. Fix the text without changing my wording."
+rules = [
+  "Fix grammar, spelling, capitalization, spacing, and punctuation only.",
+  "Do not change, remove, or add any words I used.",
+  "Allowed exceptions: You may correct spelling mistakes, adjust spacing/line breaks, and apply markdown formatting ONLY when explicitly requested.",
+  "These are words that can be used to correct names or other things: {names}. If a name/word appears in the text, check against this list.",
+  "Just write the modified text and nothing else."
+]
+input_placeholder = "Text: {text}"
+
+
+
 [prompts.summarize]
+display_name = "Summarize"
 instruction = "Summarize the transcript clearly and concisely."
 formatting_rules = [
   "Use Markdown bullet points.",
@@ -9,20 +38,6 @@ formatting_rules = [
 ]
 input_placeholder = "Transcript: {text}"
 
-[prompts.grammar]
-instruction = "This is a transcription. Fix the text without changing my wording."
-rules = [
-  "Fix grammar, spelling, capitalization, spacing, and punctuation only.",
-  "Combine sentences into clear paragraphs by topic.",
-  "Do not change, remove, or add any words I used.",
-  "Allowed exceptions: You may correct spelling mistakes, adjust spacing/line breaks, and apply markdown formatting ONLY when explicitly requested.",
-  "These are words that can be used to correct names or other things: {names}. If a name/word appears in the text, check against this list.",
-  "If I say 'make this a list': Convert the content into a markdown list using '-', remove any structural cues like 'next' or 'end list', do not change wording of items.",
-  "If I say 'make this a numbered list': Convert into a numbered markdown list using '1.', do not change wording of items.",
-  "If I say 'heading one', 'heading two', or 'heading three': Convert that sentence into a markdown heading of that level.",
-  "Just write the modified text and nothing else."
-]
-input_placeholder = "Text: {text}"
 
 [prompts.edit]
 instruction = """
@@ -67,5 +82,4 @@ rules = [
   "Assume the input refers to the currently selected file.",
   "Input may originate from text or transcribed audio.",
 ]
-
 input_placeholder = "Text:\n{text}"

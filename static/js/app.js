@@ -44,6 +44,10 @@ const state = {
 
   // Prefs
   autoFixEnabled: localStorage.getItem("autoFixEnabled") === "true",
+
+  // AI modes (populated from server)
+  aiModes: {},
+  currentAIMode: null,
   
   // Auto-fix tracking to prevent multiple runs
   autoFixRunning: false,
@@ -69,8 +73,9 @@ const dom = {
   progressPct: document.getElementById("progress-pct"),
   progressElapsed: document.getElementById("progress-elapsed"),
   progressLastUpdate: document.getElementById("progress-last-update"),
-  btnSummarize: document.getElementById("btn-summarize"),
-  btnGrammar: document.getElementById("btn-grammar"),
+  aiModeSelector: document.getElementById("ai-mode-selector"),
+  btnAi: document.getElementById("btn-ai"),
+  btnAddMode: document.getElementById("btn-add-mode"),
   btnEditVoice: document.getElementById("btn-edit-voice"),
   btnCopy: document.getElementById("btn-copy"),
   btnExport: document.getElementById("btn-export"),
@@ -79,9 +84,16 @@ const dom = {
   headerProgress: document.getElementById("header-progress"),
   headerProgressFill: document.getElementById("header-progress-fill"),
   headerProgressLabel: document.getElementById("header-progress-label"),
-  autoFixToggle: document.getElementById("auto-fix-toggle"),
+  // autoFixToggle removed, using button below
+  btnAutoFix: document.getElementById("btn-auto-fix-toggle"),
   personalNamesModal: document.getElementById("personal-names-modal"),
   personalNamesInput: document.getElementById("personal-names-input"),
+  modeModal: document.getElementById("mode-modal"),
+  modeNameInput: document.getElementById("mode-name-input"),
+  modeDisplayInput: document.getElementById("mode-display-input"),
+  modeInstructionInput: document.getElementById("mode-instruction-input"),
+  modeRulesInput: document.getElementById("mode-rules-input"),
+  modePlaceholderInput: document.getElementById("mode-placeholder-input"),
 };
 
 const ctx2d = dom.waveformCanvas.getContext("2d");
@@ -94,6 +106,44 @@ function toast(msg, type = "info") {
   t.textContent = msg;
   document.getElementById("toast-container").appendChild(t);
   setTimeout(() => t.remove(), 4000);
+}
+
+// ─── AI Mode Management ──────────────────────────────────────────────────
+
+async function loadAIModes() {
+  try {
+    const res = await fetch("/api/ai/modes");
+    if (!res.ok) throw new Error("Failed to load modes");
+    const { modes, order } = await res.json();
+    state.aiModes = modes;
+    state.aiModeOrder = order || Object.keys(modes);
+
+    const sel = dom.aiModeSelector;
+    sel.innerHTML = "";
+    state.aiModeOrder.forEach((mode) => {
+      const info = modes[mode] || {};
+      const opt = document.createElement("option");
+      opt.value = mode;
+      opt.textContent = info.display_name || mode;
+      sel.appendChild(opt);
+    });
+
+    if (!state.currentAIMode || !modes[state.currentAIMode]) {
+      state.currentAIMode = sel.options[0]?.value;
+    }
+    sel.value = state.currentAIMode;
+    updateAiButtonLabel();
+    sel.disabled = false;
+    dom.btnAi.disabled = false;
+  } catch (e) {
+    console.error("unable to fetch ai modes", e);
+  }
+}
+
+function updateAiButtonLabel() {
+  const info = state.aiModes[state.currentAIMode] || {};
+  const name = info.display_name || state.currentAIMode || "Process";
+  dom.btnAi.textContent = name;
 }
 
 // ─── Header Progress Bar ──────────────────────────────────────────────────────
@@ -354,7 +404,9 @@ function addJob(job) {
   const tpl = document.getElementById("tpl-job").content.cloneNode(true);
   const el = tpl.querySelector(".job-item");
   el.dataset.id = job.id;
-  el.querySelector(".job-name").textContent = job.filename;
+  const nameEl = el.querySelector(".job-name");
+  nameEl.textContent = job.filename;
+  nameEl.title = job.filename; // tooltip for long names
 
   const statusEl = el.querySelector(".job-status");
   statusEl.className = `job-status status-${job.status}`;
@@ -632,8 +684,8 @@ function stopElapsedTimer() {
 
 function setEditorButtons(on) {
   [
-    dom.btnSummarize,
-    dom.btnGrammar,
+    dom.aiModeSelector,
+    dom.btnAi,
     dom.btnEditVoice,
     dom.btnCopy,
     dom.btnExport,
@@ -698,13 +750,22 @@ function renderAiResults(aiResults) {
     .map((r, originalIdx) => ({ ...r, originalIdx }))
     .sort((a, b) => {
       if (a.mode === b.mode) return b.created_at - a.created_at;
-      return a.mode === "grammar" ? -1 : 1;
+      // modes not same: follow configured order if available
+      const order = state.aiModeOrder || [];
+      const ia = order.indexOf(a.mode);
+      const ib = order.indexOf(b.mode);
+      if (ia !== -1 && ib !== -1 && ia !== ib) return ia - ib;
+      if (ia !== -1 && ib === -1) return -1;
+      if (ib !== -1 && ia === -1) return 1;
+      return a.mode.localeCompare(b.mode);
     });
 
   sorted.forEach((r) => {
-    const isGrammar = r.mode !== "summarize";
-    const label = isGrammar ? "✦ Grammar Fix" : "⚡ Summary";
-    const badgeCls = isGrammar ? "badge-grammar" : "badge-summarize";
+    const info = state.aiModes[r.mode] || {};
+    const label = info.display_name || r.mode;
+    let badgeCls = "badge-custom";
+    if (r.mode === "summarize") badgeCls = "badge-summarize";
+    else if (r.mode === "grammar") badgeCls = "badge-grammar";
     const timeStr = new Date(r.created_at * 1000).toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
@@ -714,6 +775,9 @@ function renderAiResults(aiResults) {
       .getElementById("tpl-ai-result")
       .content.cloneNode(true)
       .querySelector(".ai-result-block");
+    if (r._temp) {
+      block.dataset.temp = "1";
+    }
     const badge = block.querySelector(".ai-result-badge");
     badge.textContent = label;
     badge.className = `ai-result-badge ${badgeCls}`;
@@ -762,16 +826,16 @@ function renderAiResults(aiResults) {
   });
 }
 
-async function aiAction(mode) {
+async function aiAction() {
   const text = dom.editor.value;
   if (!text.trim()) return;
 
-  const btn = mode === "summarize" ? dom.btnSummarize : dom.btnGrammar;
+  const mode = state.currentAIMode;
+  const btn = dom.btnAi;
   const origText = btn.textContent;
   btn.disabled = true;
   btn.textContent = "…";
 
-  // Create a temporary AI result block for streaming display
   const tempResult = {
     mode: mode,
     text: "",
@@ -780,13 +844,14 @@ async function aiAction(mode) {
     _temp: true,
   };
 
-  // Show the streaming UI immediately
+  // initial render + grab references for updates
   renderAiResults([tempResult]);
-  setHeaderProgress(
-    mode === "summarize" ? "Summarizing" : "Processing",
-    10,
-    { aiMode: true },
-  );
+  const tempElem = dom.aiResultsPanel.querySelector(".ai-result-block[data-temp]");
+  const bodyEl = tempElem?.querySelector(".ai-result-body");
+  const progFill = tempElem?.querySelector(".ai-result-progress-fill");
+
+  const modeLabel = state.aiModes[mode]?.display_name || mode;
+  setHeaderProgress(`${modeLabel}…`, 10, { aiMode: true });
 
   try {
     const response = await fetch("/api/ai/stream", {
@@ -805,11 +870,9 @@ async function aiAction(mode) {
     let fullText = "";
     let fakeProgress = 10;
 
-    // Simulate progress while streaming
     const fakeInterval = setInterval(() => {
       fakeProgress = Math.min(fakeProgress + 3, 90);
-      tempResult.progress = fakeProgress;
-      renderAiResults([tempResult]);
+      if (progFill) progFill.style.width = fakeProgress + "%";
     }, 300);
 
     while (true) {
@@ -831,19 +894,17 @@ async function aiAction(mode) {
 
             if (data.chunk) {
               fullText += data.chunk;
-              tempResult.text = fullText;
-              renderAiResults([tempResult]);
+              if (bodyEl) bodyEl.textContent = fullText;
             }
 
             if (data.done) {
               clearInterval(fakeInterval);
               fullText = data.text || fullText;
-              tempResult.text = fullText;
-              tempResult.progress = 100;
+              if (bodyEl) bodyEl.textContent = fullText;
+              if (progFill) progFill.style.width = "100%";
               setHeaderProgress("Complete", 100, { aiMode: true });
             }
           } catch (e) {
-            // Skip invalid JSON
             continue;
           }
         }
@@ -851,19 +912,13 @@ async function aiAction(mode) {
     }
 
     clearInterval(fakeInterval);
-
-    // Refresh the AI panel with actual saved results
     await refreshAiPanel();
-    toast(
-      `${mode === "summarize" ? "Summary" : "Grammar fix"} saved`,
-      "success",
-    );
-
+    toast(`${state.aiModes[mode]?.display_name || mode} saved`, "success");
     setTimeout(() => setHeaderProgress("", 0, { hide: true }), 1500);
   } catch (e) {
     setHeaderProgress("", 0, { hide: true });
     toast(e.message || `AI request failed: ${e}`, "error");
-    renderAiResults([]); // Clear the temp result on error
+    renderAiResults([]);
   } finally {
     btn.disabled = false;
     btn.textContent = origText;
@@ -871,8 +926,7 @@ async function aiAction(mode) {
   }
 }
 
-dom.btnSummarize.addEventListener("click", () => aiAction("summarize"));
-dom.btnGrammar.addEventListener("click", () => aiAction("grammar"));
+dom.btnAi.addEventListener("click", aiAction);
 
 async function refreshAiPanel() {
   if (!state.activeJobId) return;
@@ -883,11 +937,25 @@ async function refreshAiPanel() {
 
 // ─── Auto-fix ─────────────────────────────────────────────────────────────────
 
-dom.autoFixToggle.checked = state.autoFixEnabled;
-dom.autoFixToggle.addEventListener("change", (e) => {
-  state.autoFixEnabled = e.target.checked;
-  localStorage.setItem("autoFixEnabled", state.autoFixEnabled);
-});
+// migrate toggle input to button
+function updateAutoFixButton() {
+  const btn = document.getElementById("btn-auto-fix-toggle");
+  if (!btn) return;
+  btn.textContent = state.autoFixEnabled ? "Auto‑fix on" : "Auto‑fix off";
+  btn.classList.toggle("active", state.autoFixEnabled);
+}
+
+// initialize after DOM ready
+updateAutoFixButton();
+
+const btnAutoFix = document.getElementById("btn-auto-fix-toggle");
+if (btnAutoFix) {
+  btnAutoFix.addEventListener("click", () => {
+    state.autoFixEnabled = !state.autoFixEnabled;
+    localStorage.setItem("autoFixEnabled", state.autoFixEnabled);
+    updateAutoFixButton();
+  });
+}
 
 async function triggerAutoFix(jobId, transcript) {
   // Guard: prevent multiple auto-fix runs for the same job
@@ -911,6 +979,10 @@ async function triggerAutoFix(jobId, transcript) {
   };
 
   renderAiResults([tempResult]);
+  const tempElem = dom.aiResultsPanel.querySelector(".ai-result-block[data-temp]");
+  const bodyEl = tempElem?.querySelector(".ai-result-body");
+  const progFill = tempElem?.querySelector(".ai-result-progress-fill");
+
   setHeaderProgress("Auto-fixing", 10, { aiMode: true });
 
   try {
@@ -937,8 +1009,7 @@ async function triggerAutoFix(jobId, transcript) {
     // Simulate progress while streaming
     const fakeInterval = setInterval(() => {
       fakeProgress = Math.min(fakeProgress + 3, 90);
-      tempResult.progress = fakeProgress;
-      renderAiResults([tempResult]);
+      if (progFill) progFill.style.width = fakeProgress + "%";
     }, 300);
 
     while (true) {
@@ -960,15 +1031,14 @@ async function triggerAutoFix(jobId, transcript) {
 
             if (data.chunk) {
               fullText += data.chunk;
-              tempResult.text = fullText;
-              renderAiResults([tempResult]);
+              if (bodyEl) bodyEl.textContent = fullText;
             }
 
             if (data.done) {
               clearInterval(fakeInterval);
               fullText = data.text || fullText;
-              tempResult.text = fullText;
-              tempResult.progress = 100;
+              if (bodyEl) bodyEl.textContent = fullText;
+              if (progFill) progFill.style.width = "100%";
               setHeaderProgress("Complete", 100, { aiMode: true });
             }
           } catch (e) {
@@ -1173,9 +1243,93 @@ dom.personalNamesModal
   .querySelector(".modal-backdrop")
   .addEventListener("click", closePersonalNamesModal);
 
+// ─── Mode Creation Modal ─────────────────────────────────────────────────────
+
+function openModeModal() {
+  dom.modeModal.classList.add("active");
+  // clear fields
+  dom.modeNameInput.value = "";
+  dom.modeDisplayInput.value = "";
+  dom.modeInstructionInput.value = "";
+  dom.modeRulesInput.value = "";
+  dom.modePlaceholderInput.value = "";
+}
+
+function closeModeModal() {
+  dom.modeModal.classList.remove("active");
+}
+
+async function saveModeModal() {
+  const mode = dom.modeNameInput.value.trim();
+  if (!mode) {
+    toast("Mode name required", "error");
+    return;
+  }
+  const instruction = dom.modeInstructionInput.value.trim();
+  if (!instruction) {
+    toast("Instruction required", "error");
+    return;
+  }
+  const display = dom.modeDisplayInput.value.trim();
+  const placeholder = dom.modePlaceholderInput.value.trim();
+  const rawRules = dom.modeRulesInput.value
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const config = { instruction };
+  if (display) config.display_name = display;
+  if (placeholder) config.input_placeholder = placeholder;
+  if (rawRules.length) {
+    // decide whether to use formatting_rules (bullet) or numbered rules
+    const bulletish = rawRules.every((l) => l.startsWith("-") || l.startsWith("*"));
+    if (bulletish) {
+      config.formatting_rules = rawRules.map((l) => l.replace(/^[-*]\s*/, ""));
+    } else {
+      config.rules = rawRules;
+    }
+  }
+
+  try {
+    const res = await fetch("/api/ai/modes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode, config }),
+    });
+    const data = await res.json();
+    if (data.error) {
+      toast(data.error, "error");
+    } else {
+      toast("Mode saved", "success");
+      closeModeModal();
+      await loadAIModes();
+      state.currentAIMode = mode;
+      dom.aiModeSelector.value = mode;
+      updateAiButtonLabel();
+    }
+  } catch (e) {
+    toast(`Failed to save mode: ${e.message}`, "error");
+  }
+}
+
+document.getElementById("btn-add-mode").addEventListener("click", openModeModal);
+document.getElementById("close-mode-modal").addEventListener("click", closeModeModal);
+document.getElementById("cancel-mode-modal").addEventListener("click", closeModeModal);
+document.getElementById("save-mode-modal").addEventListener("click", saveModeModal);
+dom.modeModal.querySelector(".modal-backdrop").addEventListener("click", closeModeModal);
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
 async function init() {
+  // load AI modes first so button/selector are ready
+  await loadAIModes();
+
+  // selector change handler
+  dom.aiModeSelector.addEventListener("change", (e) => {
+    state.currentAIMode = e.target.value;
+    updateAiButtonLabel();
+  });
+
   try {
     const res = await fetch("/api/jobs");
     const list = await res.json();
