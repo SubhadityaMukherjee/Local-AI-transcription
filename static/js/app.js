@@ -41,6 +41,8 @@ const state = {
   lastUpdateTime: {},
   lastProgress: {},
   elapsedInterval: null,
+  // Track which jobs we've auto-triggered AI for to avoid duplicates
+  aiTriggeredJobs: new Set(),
 
   // Prefs
   autoFixEnabled: localStorage.getItem("autoFixEnabled") === "true",
@@ -610,11 +612,15 @@ function watchJob(id) {
               // in the chat without requiring manual copy/paste.
               try {
                 if ((!job.ai_results || job.ai_results.length === 0) && job.transcript) {
-                  // Ensure a sensible AI mode is selected before invoking AI
-                  state.currentAIMode = dom.aiModeSelector?.value || state.currentAIMode || Object.keys(state.aiModes || {})[0];
-                  updateAiButtonLabel();
-                  // Run only the selected mode for this transcript
-                  await aiAction(job.transcript, state.currentAIMode);
+                  // Avoid double-triggering for the same job
+                  if (!state.aiTriggeredJobs.has(id)) {
+                    state.aiTriggeredJobs.add(id);
+                    // Ensure a sensible AI mode is selected before invoking AI
+                    state.currentAIMode = dom.aiModeSelector?.value || state.currentAIMode || Object.keys(state.aiModes || {})[0];
+                    updateAiButtonLabel();
+                    // Run only the selected mode for this transcript
+                    await aiAction(job.transcript, state.currentAIMode);
+                  }
                 }
               } catch (e) {
                 console.warn("Auto AI action failed:", e);
@@ -637,6 +643,8 @@ function watchJob(id) {
         delete state.jobStartTime[id];
         delete state.lastUpdateTime[id];
         delete state.lastProgress[id];
+        // Allow re-triggering later if job is rerun
+        state.aiTriggeredJobs.delete(id);
       }
     } catch (e) {
       console.error("Error parsing progress payload:", e);
@@ -681,6 +689,7 @@ function watchJobPoll(id) {
       delete state.jobStartTime[id];
       delete state.lastUpdateTime[id];
       delete state.lastProgress[id];
+        state.aiTriggeredJobs.delete(id);
       setHeaderProgress("", 0, { hide: true });
 
       if (job.status === "done") {
@@ -694,11 +703,15 @@ function watchJobPoll(id) {
         // currently exist for the job.
         try {
           if ((!job.ai_results || job.ai_results.length === 0) && job.transcript) {
-            // select current mode from selector if available
-            state.currentAIMode = dom.aiModeSelector?.value || state.currentAIMode || Object.keys(state.aiModes || {})[0];
-            updateAiButtonLabel();
-            // Run only the selected mode for this transcript
-            await aiAction(job.transcript, state.currentAIMode);
+            // Avoid duplicate triggers from polling fallback
+            if (!state.aiTriggeredJobs.has(id)) {
+              state.aiTriggeredJobs.add(id);
+              // select current mode from selector if available
+              state.currentAIMode = dom.aiModeSelector?.value || state.currentAIMode || Object.keys(state.aiModes || {})[0];
+              updateAiButtonLabel();
+              // Run only the selected mode for this transcript
+              await aiAction(job.transcript, state.currentAIMode);
+            }
           }
         } catch (e) {
           console.warn("Auto AI action failed (poll):", e);

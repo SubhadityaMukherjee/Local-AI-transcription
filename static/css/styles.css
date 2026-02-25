@@ -935,15 +935,21 @@ canvas#waveform {
 
 /* ── PROCESSING OVERLAY ───────────────────────────────────────────── */
 .processing-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(14, 14, 15, 0.88);
+  /* Small non-modal processing panel in the top-right instead of full-page */
+  position: fixed;
+  top: 72px;
+  right: 20px;
+  width: 340px;
+  background: rgba(14, 14, 15, 0.92);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 0.8rem;
   display: none;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  backdrop-filter: blur(4px);
+  align-items: stretch;
+  gap: 0.6rem;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+  z-index: 10000;
 }
 
 .processing-overlay.active {
