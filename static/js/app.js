@@ -772,6 +772,9 @@ function renderAiResults(aiResults) {
       .getElementById("tpl-ai-result")
       .content.cloneNode(true)
       .querySelector(".ai-result-block");
+    if (r._temp) {
+      block.dataset.temp = "1";
+    }
     const badge = block.querySelector(".ai-result-badge");
     badge.textContent = label;
     badge.className = `ai-result-badge ${badgeCls}`;
@@ -838,7 +841,12 @@ async function aiAction() {
     _temp: true,
   };
 
+  // initial render + grab references for updates
   renderAiResults([tempResult]);
+  const tempElem = dom.aiResultsPanel.querySelector(".ai-result-block[data-temp]");
+  const bodyEl = tempElem?.querySelector(".ai-result-body");
+  const progFill = tempElem?.querySelector(".ai-result-progress-fill");
+
   const modeLabel = state.aiModes[mode]?.display_name || mode;
   setHeaderProgress(`${modeLabel}…`, 10, { aiMode: true });
 
@@ -861,8 +869,7 @@ async function aiAction() {
 
     const fakeInterval = setInterval(() => {
       fakeProgress = Math.min(fakeProgress + 3, 90);
-      tempResult.progress = fakeProgress;
-      renderAiResults([tempResult]);
+      if (progFill) progFill.style.width = fakeProgress + "%";
     }, 300);
 
     while (true) {
@@ -884,15 +891,14 @@ async function aiAction() {
 
             if (data.chunk) {
               fullText += data.chunk;
-              tempResult.text = fullText;
-              renderAiResults([tempResult]);
+              if (bodyEl) bodyEl.textContent = fullText;
             }
 
             if (data.done) {
               clearInterval(fakeInterval);
               fullText = data.text || fullText;
-              tempResult.text = fullText;
-              tempResult.progress = 100;
+              if (bodyEl) bodyEl.textContent = fullText;
+              if (progFill) progFill.style.width = "100%";
               setHeaderProgress("Complete", 100, { aiMode: true });
             }
           } catch (e) {
@@ -956,6 +962,10 @@ async function triggerAutoFix(jobId, transcript) {
   };
 
   renderAiResults([tempResult]);
+  const tempElem = dom.aiResultsPanel.querySelector(".ai-result-block[data-temp]");
+  const bodyEl = tempElem?.querySelector(".ai-result-body");
+  const progFill = tempElem?.querySelector(".ai-result-progress-fill");
+
   setHeaderProgress("Auto-fixing", 10, { aiMode: true });
 
   try {
@@ -982,8 +992,7 @@ async function triggerAutoFix(jobId, transcript) {
     // Simulate progress while streaming
     const fakeInterval = setInterval(() => {
       fakeProgress = Math.min(fakeProgress + 3, 90);
-      tempResult.progress = fakeProgress;
-      renderAiResults([tempResult]);
+      if (progFill) progFill.style.width = fakeProgress + "%";
     }, 300);
 
     while (true) {
@@ -1005,15 +1014,14 @@ async function triggerAutoFix(jobId, transcript) {
 
             if (data.chunk) {
               fullText += data.chunk;
-              tempResult.text = fullText;
-              renderAiResults([tempResult]);
+              if (bodyEl) bodyEl.textContent = fullText;
             }
 
             if (data.done) {
               clearInterval(fakeInterval);
               fullText = data.text || fullText;
-              tempResult.text = fullText;
-              tempResult.progress = 100;
+              if (bodyEl) bodyEl.textContent = fullText;
+              if (progFill) progFill.style.width = "100%";
               setHeaderProgress("Complete", 100, { aiMode: true });
             }
           } catch (e) {
