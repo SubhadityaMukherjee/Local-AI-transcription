@@ -305,12 +305,16 @@ h1 {
   background: rgba(224, 92, 92, 0.08);
 }
 
-.record-btn.recording {
-  border-color: var(--red);
-  background: rgba(224, 92, 92, 0.15);
-  animation: pulse-ring 1.5s ease infinite;
+.record-btn.recording,
+.chat-record-btn.recording,
+.chat-append-btn.recording,
+#record-btn.recording,
+#chat-record-btn.recording,
+#append-btn.recording,
+#chat-append-btn.recording {
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  color: #0e0e0f;
 }
-
 .record-btn .dot {
   width: 22px;
   height: 22px;
@@ -833,6 +837,19 @@ canvas#waveform {
   cursor: pointer;
   font-size: 0.95rem;
 }
+.chat-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.95rem;
+}
 .chat-record-btn .dot-small {
   color: var(--red);
   font-size: 1.1rem;
@@ -924,6 +941,27 @@ canvas#waveform {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* Recording button visual emphasis */
+.recording {
+  box-shadow: 0 0 0 6px rgba(196, 168, 130, 0.12);
+  position: relative;
+  animation: pulse 1.2s infinite ease-in-out;
+}
+
+/* Specific target for chat/toolbar record buttons */
+.record-btn.recording,
+.chat-record-btn.recording,
+.chat-append-btn.recording {
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  color: #0e0e0f;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 6px rgba(196,168,130,0.08); }
+  50% { box-shadow: 0 0 0 12px rgba(196,168,130,0.06); }
+  100% { box-shadow: 0 0 0 6px rgba(196,168,130,0.08); }
 }
 
 .progress-block {

@@ -3,7 +3,7 @@ instruction = "This is a transcription. Fix the text without changing my wording
 rules = [
   "Fix grammar, spelling, capitalization, spacing, and punctuation only.",
   "Combine all sentences into clear paragraphs by topic. If you cant figure out the topic keep them at the end od the text",
-  "Do not change, remove, or add any words I used.",
+  "Do not change, remove, or add any words or sentences I used.",
   "Allowed exceptions: You may correct spelling mistakes, adjust spacing/line breaks, and apply markdown formatting ONLY when explicitly requested.",
   "These are words that can be used to correct names or other things: {names}. If a name/word appears in the text, check against this list.",
   "If I say 'make this a list': Convert the content into a markdown list using '-', remove any structural cues like 'next' or 'end list', do not change wording of items.",

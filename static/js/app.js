@@ -100,6 +100,7 @@ const dom = {
   chatSend: document.getElementById("chat-send"),
   chatRecordBtn: document.getElementById("chat-record-btn"),
   chatAppendBtn: document.getElementById("chat-append-btn"),
+  chatUploadBtn: document.getElementById("chat-upload-btn"),
   // Jobs drawer
   btnToggleJobsDrawer: document.getElementById("btn-toggle-jobs-drawer"),
   jobsDrawer: document.getElementById("jobs-drawer"),
@@ -275,14 +276,25 @@ async function startRecording(isAppend = false) {
 
   state.recordStart = Date.now();
   state.timerInterval = setInterval(updateTimer, 500);
-  dom.recordBtn.classList.add("recording");
+  if (dom.recordBtn) dom.recordBtn.classList.add("recording");
   if (dom.chatRecordBtn) dom.chatRecordBtn.classList.add("recording");
-  dom.appendBtn.classList.toggle("recording", isAppend);
+  if (dom.appendBtn) dom.appendBtn.classList.toggle("recording", isAppend);
   if (dom.chatAppendBtn) dom.chatAppendBtn.classList.toggle("recording", isAppend);
-  dom.statusEl.textContent = isAppend
-    ? "Appending… click to stop"
-    : "Recording… click to stop";
-  dom.statusEl.classList.add("active");
+  // Apply inline styles as a fallback if CSS isn't applied/loaded.
+  if (dom.chatRecordBtn) {
+    dom.chatRecordBtn.style.animation = "pulse 1.2s infinite ease-in-out";
+    dom.chatRecordBtn.style.boxShadow = "0 0 0 6px rgba(196, 168, 130, 0.12)";
+  }
+  if (dom.chatAppendBtn && isAppend) {
+    dom.chatAppendBtn.style.animation = "pulse 1.2s infinite ease-in-out";
+    dom.chatAppendBtn.style.boxShadow = "0 0 0 6px rgba(196, 168, 130, 0.12)";
+  }
+  if (dom.statusEl) {
+    dom.statusEl.textContent = isAppend
+      ? "Appending… click to stop"
+      : "Recording… click to stop";
+    dom.statusEl.classList.add("active");
+  }
 }
 
 function stopRecording() {
@@ -290,13 +302,23 @@ function stopRecording() {
   state.recordStream?.getTracks().forEach((t) => t.stop());
   clearInterval(state.timerInterval);
   cancelAnimationFrame(state.animFrame);
-  dom.recordBtn.classList.remove("recording");
+  if (dom.recordBtn) dom.recordBtn.classList.remove("recording");
   if (dom.chatRecordBtn) dom.chatRecordBtn.classList.remove("recording");
-  dom.appendBtn.classList.remove("recording");
+  if (dom.chatRecordBtn) {
+    dom.chatRecordBtn.style.animation = "";
+    dom.chatRecordBtn.style.boxShadow = "";
+  }
+  if (dom.appendBtn) dom.appendBtn.classList.remove("recording");
   if (dom.chatAppendBtn) dom.chatAppendBtn.classList.remove("recording");
-  dom.statusEl.textContent = "Uploading…";
-  dom.statusEl.classList.remove("active");
-  dom.timerEl.textContent = "";
+  if (dom.chatAppendBtn) {
+    dom.chatAppendBtn.style.animation = "";
+    dom.chatAppendBtn.style.boxShadow = "";
+  }
+  if (dom.statusEl) {
+    dom.statusEl.textContent = "Uploading…";
+    dom.statusEl.classList.remove("active");
+  }
+  if (dom.timerEl) dom.timerEl.textContent = "";
   if (ctx2d && dom.waveformCanvas) ctx2d.clearRect(0, 0, dom.waveformCanvas.width, dom.waveformCanvas.height);
 }
 
@@ -307,7 +329,7 @@ async function submitRecording() {
 
   if (blob.size < 1000) {
     toast("Recording too short or empty — try again", "error");
-    dom.statusEl.textContent = "Click to start recording";
+    if (dom.statusEl) dom.statusEl.textContent = "Click to start recording";
     return;
   }
 
@@ -325,6 +347,8 @@ async function submitRecording() {
         watchJob(state.appendJobId);
         selectJob(state.appendJobId);
       } else {
+        // start a new chat for this recording
+        startNewConversation();
         addJob({
           id: data.job_id,
           filename: `recording.${ext}`,
@@ -344,12 +368,12 @@ async function submitRecording() {
 
   state.appendMode = false;
   state.appendJobId = null;
-  dom.statusEl.textContent = "Click to start recording";
+  if (dom.statusEl) dom.statusEl.textContent = "Click to start recording";
 }
 
 function updateTimer() {
   const s = Math.floor((Date.now() - state.recordStart) / 1000);
-  dom.timerEl.textContent = `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+  if (dom.timerEl) dom.timerEl.textContent = `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 }
 
 function drawWaveform() {
@@ -380,6 +404,17 @@ if (dom.fileInput) {
     if (e.target.files[0]) uploadFile(e.target.files[0]);
   });
 }
+if (dom.chatUploadBtn && dom.fileInput) {
+  dom.chatUploadBtn.addEventListener('click', () => dom.fileInput.click());
+}
+
+// Allow dropping files anywhere on the page to upload (graceful fallback)
+document.addEventListener('dragover', (e) => e.preventDefault());
+document.addEventListener('drop', (e) => {
+  e.preventDefault();
+  const f = e.dataTransfer?.files?.[0];
+  if (f) uploadFile(f);
+});
 if (dom.uploadZone) {
   dom.uploadZone.addEventListener("dragover", (e) => {
     e.preventDefault();
@@ -406,6 +441,8 @@ async function uploadFile(file) {
       toast(data.error, "error");
       return;
     }
+    // start a new conversation when uploading a file
+    startNewConversation();
     addJob({
       id: data.job_id,
       filename: file.name,
@@ -561,12 +598,29 @@ function watchJob(id) {
         if (progress.stage === "done") {
           fetch(`/api/status/${id}`)
             .then(r => r.json())
-            .then(job => {
+            .then(async (job) => {
               toast("Transcription complete!", "success");
               if (state.activeJobId === id || !state.activeJobId) {
                 showTranscript(job.transcript, job.ai_results);
                 selectJob(id);
               }
+
+              // If there are no AI results saved for this job yet, automatically
+              // invoke the AI action so the transcript is processed and appears
+              // in the chat without requiring manual copy/paste.
+              try {
+                if ((!job.ai_results || job.ai_results.length === 0) && job.transcript) {
+                  if (dom.chatInput) dom.chatInput.value = "";
+                  // Ensure a sensible AI mode is selected before invoking AI
+                  state.currentAIMode = dom.aiModeSelector?.value || state.currentAIMode || Object.keys(state.aiModes || {})[0];
+                  updateAiButtonLabel();
+                  dom.editor.value = job.transcript;
+                  await aiAction();
+                }
+              } catch (e) {
+                console.warn("Auto AI action failed:", e);
+              }
+
               if (state.autoFixEnabled && job.transcript) {
                 triggerAutoFix(id, job.transcript);
               }
@@ -634,6 +688,22 @@ function watchJobPoll(id) {
           showTranscript(job.transcript, job.ai_results);
           selectJob(id);
         }
+
+        // Auto-trigger AI processing for this transcript if no AI results
+        // currently exist for the job.
+        try {
+          if ((!job.ai_results || job.ai_results.length === 0) && job.transcript) {
+            if (dom.chatInput) dom.chatInput.value = "";
+            // select current mode from selector if available
+            state.currentAIMode = dom.aiModeSelector?.value || state.currentAIMode || Object.keys(state.aiModes || {})[0];
+            updateAiButtonLabel();
+            dom.editor.value = job.transcript;
+            await aiAction();
+          }
+        } catch (e) {
+          console.warn("Auto AI action failed (poll):", e);
+        }
+
         if (state.autoFixEnabled && job.transcript)
           triggerAutoFix(id, job.transcript);
       } else {
@@ -652,11 +722,44 @@ function watchJobPoll(id) {
 function showTranscript(text, aiResults) {
   dom.emptyState.style.display = "none";
   dom.processingOverlay.classList.remove("active");
-  dom.editor.style.display = "block";
-  dom.editor.value = text;
-  updateCharCount();
-  setEditorButtons(true);
+  // merge transcript into the chat view as an assistant-labeled message
+  try {
+    // avoid duplicate transcript messages
+    if (dom.chatMessages) {
+      const existing = Array.from(dom.chatMessages.querySelectorAll('.message.assistant'))
+        .some(m => {
+          const lbl = m.querySelector('.message-label')?.textContent?.trim();
+          const body = m.querySelector('.message-body')?.textContent?.trim();
+          return lbl === 'Transcript' && body === (text || '').trim();
+        });
+      if (!existing) appendAssistantMessage(text, "Transcript");
+    } else {
+      // fallback: show in hidden editor if chat area missing
+      dom.editor.style.display = "block";
+      dom.editor.value = text;
+      updateCharCount();
+      setEditorButtons(true);
+    }
+  } catch (e) {
+    dom.editor.style.display = "block";
+    dom.editor.value = text;
+    updateCharCount();
+    setEditorButtons(true);
+  }
+  // also render any AI results into chat
   renderAiResults(aiResults || []);
+}
+
+// Start a new conversation in the chat (clear messages). If `preserve` is true, do not clear.
+function startNewConversation(preserve = false) {
+  if (preserve) return;
+  if (!dom.chatMessages) return;
+  dom.chatMessages.innerHTML = '';
+  // show empty hint
+  const empty = document.createElement('div');
+  empty.className = 'empty-state';
+  empty.innerHTML = '<div class="empty-glyph">◌</div><div class="empty-text">Start a conversation — type below or upload audio to begin</div>';
+  dom.chatMessages.appendChild(empty);
 }
 
 function showProcessing(label, pct = 0) {
@@ -832,7 +935,9 @@ async function aiAction() {
   }
 
   const text = inputText;
-  const mode = state.currentAIMode;
+  // Prefer the selector's current value (if present) so chat-triggered actions
+  // respect the user's selected AI mode immediately.
+  const mode = dom.aiModeSelector?.value || state.currentAIMode;
   const btn = dom.btnAi;
   const origText = btn.textContent;
   btn.disabled = true;
@@ -876,7 +981,6 @@ async function aiAction() {
             const data = JSON.parse(line.slice(6));
 
             if (data.error) {
-              clearInterval(fakeInterval);
               throw new Error(data.error);
             }
 
@@ -899,7 +1003,6 @@ async function aiAction() {
       }
     }
 
-    clearInterval(fakeInterval);
     // refresh side-panel results for persistence (chat duplicate check will prevent repeats)
     await refreshAiPanel();
     toast(`${modeLabel} saved`, "success");
@@ -971,9 +1074,22 @@ async function triggerAutoFix(jobId, transcript) {
   };
 
   renderAiResults([tempResult]);
-  const tempElem = dom.aiResultsPanel.querySelector(".ai-result-block[data-temp]");
-  const bodyEl = tempElem?.querySelector(".ai-result-body");
-  const progFill = tempElem?.querySelector(".ai-result-progress-fill");
+  // Try to find the temporary element in the ai results panel; if that panel
+  // is not present (chat-first UI), fall back to creating a chat placeholder
+  // assistant message and stream into it instead.
+  let tempElem = null;
+  let bodyEl = null;
+  let progFill = null;
+  if (dom.aiResultsPanel) {
+    tempElem = dom.aiResultsPanel.querySelector(".ai-result-block[data-temp]");
+    bodyEl = tempElem?.querySelector(".ai-result-body");
+    progFill = tempElem?.querySelector(".ai-result-progress-fill");
+  }
+  if (!bodyEl) {
+    const placeholder = appendAssistantMessage("", "Grammar");
+    bodyEl = placeholder.body;
+    progFill = null; // no progress bar in chat placeholder
+  }
 
   setHeaderProgress("Auto-fixing", 10, { aiMode: true });
 
