@@ -7,6 +7,10 @@ from pathlib import Path
 from typing import Callable, Optional
 
 
+class JobCancelledError(Exception):
+    """Raised when a transcription job is cancelled by the user."""
+
+
 class TranscriptionService:
     """Service for converting audio and transcribing with Whisper."""
 

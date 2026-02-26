@@ -479,90 +479,106 @@ def register_routes(app: Flask, config, job_store, transcription_service, ai_ser
     # Cancellation events for running jobs (transcription or AI streaming)
     _cancel_events: dict = {}
 
-    def _start_job(job_id: str, src: Path):
-        """Start processing job in background thread."""
+    # ------------------------------------------------------------------
+    # Job queue implementation to serialize processing when multiple files
+    # are uploaded.  Previously each _start_job spawned its own thread which
+    # meant several whisper-cli processes could run simultaneously.  Users
+    # requested a simple FIFO queue so you can upload a batch of files and
+    # they will be handled one‑at‑a‑time.
+    # ------------------------------------------------------------------
+    _job_queue: list[tuple[str, Path]] = []
+    _queue_cv = threading.Condition()
 
-        def run():
-            # Mark as converting immediately
-            job_store.update(job_id, status="converting", progress=5)
-            
+    def _run_job(job_id: str, src: Path):
+        """Actual work previously performed inside _start_job.run()."""
+        # Mark as converting immediately
+        job_store.update(job_id, status="converting", progress=5)
+
+        with _progress_lock:
+            _transcription_progress[job_id] = {
+                "stage": "converting",
+                "pct": 5,
+                "message": "Converting audio file...",
+                "start_time": time.time(),
+            }
+
+        def on_progress(data):
+            """
+            UPGRADED: Handles both int (old style) and dict (new style).
+            Fixes the TypeError: '>=' not supported between instances of 'dict' and 'int'
+            """
+            if isinstance(data, dict):
+                pct = data.get("pct", 0)
+                stage = data.get("stage", "transcribing")
+                msg = data.get("message", f"Transcribing... {pct}%")
+                text_segment = data.get("text_segment")
+            else:
+                pct = data
+                stage = "transcribing" if pct >= 30 else "converting"
+                msg = f"{'Transcribing' if stage == 'transcribing' else 'Converting'}... {pct}%"
+                text_segment = None
+
+            job_store.update(job_id, progress=pct, status=stage)
             with _progress_lock:
-                _transcription_progress[job_id] = {
-                    "stage": "converting",
-                    "pct": 5,
-                    "message": "Converting audio file...",
-                    "start_time": time.time(),
+                prev_start = _transcription_progress.get(job_id, {}).get("start_time", time.time())
+                progress_payload = {
+                    "stage": stage,
+                    "pct": pct,
+                    "message": msg,
+                    "start_time": prev_start,
                 }
+                if text_segment:
+                    progress_payload["text_segment"] = text_segment
+                _transcription_progress[job_id] = progress_payload
 
-            def on_progress(data):
-                """
-                UPGRADED: Handles both int (old style) and dict (new style).
-                Fixes the TypeError: '>=' not supported between instances of 'dict' and 'int'
-                """
-                if isinstance(data, dict):
-                    # Data coming from the upgraded transcription_service
-                    pct = data.get("pct", 0)
-                    stage = data.get("stage", "transcribing")
-                    msg = data.get("message", f"Transcribing... {pct}%")
-                    text_segment = data.get("text_segment")
-                else:
-                    # Fallback for simple integer progress (e.g. from conversion)
-                    pct = data
-                    stage = "transcribing" if pct >= 30 else "converting"
-                    msg = f"{'Transcribing' if stage == 'transcribing' else 'Converting'}... {pct}%"
-                    text_segment = None
+        cancel_ev = threading.Event()
+        _cancel_events[job_id] = cancel_ev
+        transcription_service._cancel_event = cancel_ev
 
-                # Update the database/store
-                job_store.update(job_id, progress=pct, status=stage)
-                
-                # Update the shared progress object for SSE
+        try:
+            vstatus, result = transcription_service.process(src, job_id, on_progress)
+
+            if vstatus == "done":
+                job_store.update(job_id, status="done", progress=100, transcript=result)
                 with _progress_lock:
-                    prev_start = _transcription_progress.get(job_id, {}).get("start_time", time.time())
-                    progress_payload = {
-                        "stage": stage,
-                        "pct": pct,
-                        "message": msg,
-                        "start_time": prev_start
-                    }
-                    if text_segment:
-                        progress_payload["text_segment"] = text_segment
-                    
-                    _transcription_progress[job_id] = progress_payload
+                    _transcription_progress[job_id]["stage"] = "done"
+                    _transcription_progress[job_id]["pct"] = 100
+            elif vstatus == "cancelled":
+                job_store.update(job_id, status="cancelled", error="Cancelled by user")
+                with _progress_lock:
+                    _transcription_progress[job_id]["stage"] = "cancelled"
+                    _transcription_progress[job_id]["message"] = "Cancelled by user"
+            else:
+                job_store.update(job_id, status="error", error=result)
+                with _progress_lock:
+                    _transcription_progress[job_id]["stage"] = "error"
+                    _transcription_progress[job_id]["message"] = f"Error: {result}"
+        finally:
+            _cancel_events.pop(job_id, None)
+            if hasattr(transcription_service, "_cancel_event"):
+                delattr(transcription_service, "_cancel_event")
 
-            # Attach a cancel event for this job so other endpoints can request cancellation
-            cancel_ev = threading.Event()
-            _cancel_events[job_id] = cancel_ev
-            # Attach to transcription service so it can be observed by transcribe
-            transcription_service._cancel_event = cancel_ev
+    def _start_job(job_id: str, src: Path):
+        """Enqueue a job; the worker thread will process it sequentially."""
+        with _queue_cv:
+            _job_queue.append((job_id, src))
+            _queue_cv.notify()
 
+    def _job_worker():
+        """Background thread that pulls jobs off the queue."""
+        while True:
+            with _queue_cv:
+                while not _job_queue:
+                    _queue_cv.wait()
+                job_id, src = _job_queue.pop(0)
             try:
-                vstatus, result = transcription_service.process(src, job_id, on_progress)
+                _run_job(job_id, src)
+            except Exception as e:
+                # catch exceptions so the worker thread doesn't die
+                print(f"[queue] error processing {job_id}: {e}")
 
-                if vstatus == "done":
-                    job_store.update(job_id, status="done", progress=100, transcript=result)
-                    with _progress_lock:
-                        _transcription_progress[job_id]["stage"] = "done"
-                        _transcription_progress[job_id]["pct"] = 100
-
-                elif vstatus == "cancelled":
-                    job_store.update(job_id, status="cancelled", error="Cancelled by user")
-                    with _progress_lock:
-                        _transcription_progress[job_id]["stage"] = "cancelled"
-                        _transcription_progress[job_id]["message"] = "Cancelled by user"
-
-                else:
-                    job_store.update(job_id, status="error", error=result)
-                    with _progress_lock:
-                        _transcription_progress[job_id]["stage"] = "error"
-                        _transcription_progress[job_id]["message"] = f"Error: {result}"
-
-            finally:
-                # Clean up cancel event and service reference
-                _cancel_events.pop(job_id, None)
-                if hasattr(transcription_service, "_cancel_event"):
-                    delattr(transcription_service, "_cancel_event")
-
-        threading.Thread(target=run, daemon=True).start()
+    # start worker thread once when routes are registered
+    threading.Thread(target=_job_worker, daemon=True).start()
 
     @app.route("/api/transcribe/stream/<job_id>")
     def transcribe_stream(job_id):

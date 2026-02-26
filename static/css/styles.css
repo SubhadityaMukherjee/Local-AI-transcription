@@ -315,6 +315,39 @@ h1 {
   background: linear-gradient(90deg, var(--accent), var(--accent2));
   color: #0e0e0f;
 }
+
+/* full-screen overlay with centered record button */
+.record-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.record-overlay .record-btn.large {
+  width: 120px;
+  height: 120px;
+}
+.record-overlay .record-btn.large .dot {
+  width: 44px;
+  height: 44px;
+}
+
+/* keep overlay dot circular when recording and add stronger halo */
+.record-overlay .record-btn.recording .dot {
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+}
+.record-overlay .record-btn.recording {
+  /* override global recording glow with larger, brighter ring */
+  box-shadow: 0 0 0 20px rgba(224, 92, 92, 0.25);
+}
 .record-btn .dot {
   width: 22px;
   height: 22px;
@@ -987,9 +1020,9 @@ canvas#waveform {
 }
 
 @keyframes pulse {
-  0% { box-shadow: 0 0 0 6px rgba(196,168,130,0.08); }
-  50% { box-shadow: 0 0 0 12px rgba(196,168,130,0.06); }
-  100% { box-shadow: 0 0 0 6px rgba(196,168,130,0.08); }
+  0% { box-shadow: 0 0 0 6px rgba(196,168,130,0.08); transform: scale(1); }
+  50% { box-shadow: 0 0 0 12px rgba(196,168,130,0.06); transform: scale(1.1); }
+  100% { box-shadow: 0 0 0 6px rgba(196,168,130,0.08); transform: scale(1); }
 }
 
 .progress-block {
