@@ -17,11 +17,6 @@ class TranscriptionService:
     def __init__(self, config):
         self.config = config
 
-
-class JobCancelledError(Exception):
-    """Raised when a transcription job is cancelled by the user."""
-
-
     def convert_to_wav(self, src: Path, dst: Path):
         """Convert audio file to WAV format and strip silences."""
         result = subprocess.run(
