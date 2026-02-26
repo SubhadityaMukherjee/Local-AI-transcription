@@ -44,6 +44,9 @@ const state = {
   // Track which jobs we've auto-triggered AI for to avoid duplicates
   aiTriggeredJobs: new Set(),
 
+  // Reader for any active streaming AI request (so we can cancel it)
+  currentAIReader: null,
+
   // Prefs
   autoFixEnabled: localStorage.getItem("autoFixEnabled") === "true",
 
@@ -71,6 +74,7 @@ const dom = {
   emptyState: document.getElementById("empty-state"),
   processingOverlay: document.getElementById("processing-overlay"),
   processingLabel: document.getElementById("processing-label"),
+  processingCancel: document.getElementById("processing-cancel"),
   progressBarFill: document.getElementById("progress-bar-fill"),
   progressPct: document.getElementById("progress-pct"),
   progressElapsed: document.getElementById("progress-elapsed"),
@@ -592,7 +596,7 @@ function watchJob(id) {
       }
 
       // 3. Handle Lifecycle States
-      if (progress.stage === "done" || progress.stage === "error") {
+      if (progress.stage === "done" || progress.stage === "error" || progress.stage === "cancelled") {
         eventSource.close();
         stopElapsedTimer();
         setHeaderProgress("", 0, { hide: true });
@@ -632,6 +636,9 @@ function watchJob(id) {
                       triggerAutoFix(id, job.transcript);
                     }
             });
+        } else if (progress.stage === "cancelled") {
+          toast("Job cancelled", "info");
+          if (state.activeJobId === id) dom.processingOverlay.classList.remove("active");
         } else {
           toast(`Job failed: ${progress.message}`, "error");
           if (state.activeJobId === id) {
@@ -683,7 +690,7 @@ function watchJobPoll(id) {
       state.lastUpdateTime[id] = Date.now();
     }
 
-    if (job.status === "done" || job.status === "error") {
+    if (job.status === "done" || job.status === "error" || job.status === "cancelled") {
       clearInterval(poll);
       stopElapsedTimer();
       delete state.jobStartTime[id];
@@ -1024,6 +1031,8 @@ async function aiAction(overrideText = null, overrideMode = null) {
     }
 
     const reader = response.body.getReader();
+    // keep reference so user can cancel streaming AI requests
+    state.currentAIReader = reader;
     const decoder = new TextDecoder();
     let fullText = "";
 
@@ -1069,12 +1078,14 @@ async function aiAction(overrideText = null, overrideMode = null) {
     setHeaderProgress("", 0, { hide: true });
     toast(e.message || `AI request failed: ${e}`, "error");
     renderAiResults([]);
-  } finally {
+    } finally {
     btn.disabled = false;
     btn.textContent = origText;
     setEditorButtons(true);
     if (dom.chatInput) dom.chatInput.disabled = false;
     if (dom.chatSend) dom.chatSend.disabled = false;
+    // clear streaming reader reference
+    state.currentAIReader = null;
   }
 }
 
@@ -1168,6 +1179,8 @@ async function triggerAutoFix(jobId, transcript) {
     }
 
     const reader = response.body.getReader();
+    // allow cancellation of this streaming request
+    state.currentAIReader = reader;
     const decoder = new TextDecoder();
     let fullText = "";
     let fakeProgress = 10;
@@ -1216,6 +1229,7 @@ async function triggerAutoFix(jobId, transcript) {
     }
 
     clearInterval(fakeInterval);
+    state.currentAIReader = null;
 
     // Refresh AI panel with actual saved results
     const res2 = await fetch(`/api/status/${jobId}`);
@@ -1548,4 +1562,29 @@ if (dom.btnToggleJobsDrawer && dom.jobsDrawer) {
   });
   if (dom.jobsDrawerBackdrop) dom.jobsDrawerBackdrop.addEventListener('click', closeDrawer);
   if (dom.jobsDrawerClose) dom.jobsDrawerClose.addEventListener('click', closeDrawer);
+}
+
+// Processing cancel button: request server to cancel active job and abort any active AI stream
+if (dom.processingCancel) {
+  dom.processingCancel.addEventListener('click', async () => {
+    const id = state.activeJobId;
+    if (!id) return;
+    try {
+      // Tell server to cancel (idempotent)
+      await fetch(`/api/jobs/${id}/cancel`, { method: 'POST' });
+      toast('Cancellation requested', 'info');
+    } catch (e) {
+      console.warn('Cancel request failed', e);
+    }
+
+    // Abort any active AI streaming reader on the client
+    if (state.currentAIReader) {
+      try {
+        state.currentAIReader.cancel();
+      } catch (e) {
+        // ignore
+      }
+      state.currentAIReader = null;
+    }
+  });
 }

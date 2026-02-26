@@ -2,6 +2,7 @@
 
 import os
 import subprocess
+import threading
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -11,6 +12,11 @@ class TranscriptionService:
 
     def __init__(self, config):
         self.config = config
+
+
+class JobCancelledError(Exception):
+    """Raised when a transcription job is cancelled by the user."""
+
 
     def convert_to_wav(self, src: Path, dst: Path):
         """Convert audio file to WAV format and strip silences."""
@@ -33,7 +39,11 @@ class TranscriptionService:
             raise RuntimeError(f"ffmpeg failed:\n{result.stderr[-800:]}")
 
     def transcribe(
-        self, wav: Path, job_id: str, progress_callback: Callable[[dict], None] = None
+        self,
+        wav: Path,
+        job_id: str,
+        progress_callback: Callable[[dict], None] = None,
+        cancel_event: Optional[threading.Event] = None,
     ):
         """Transcribe audio file using Whisper with flicker-reduction logic."""
         if not self.config.WHISPER_BIN:
@@ -65,6 +75,15 @@ class TranscriptionService:
             line = line.strip()
             if not line:
                 continue
+
+            # Check for cancellation request and terminate child process
+            if cancel_event and cancel_event.is_set():
+                try:
+                    proc.terminate()
+                except Exception:
+                    pass
+                proc.wait()
+                raise JobCancelledError("cancelled")
 
             print(f"[whisper] {line}") # Keep server logs active
 
@@ -99,7 +118,7 @@ class TranscriptionService:
                     pass
 
         proc.wait()
-        
+
         if proc.returncode != 0:
             raise RuntimeError(f"whisper-cli exited with code {proc.returncode}")
 
@@ -149,13 +168,28 @@ class TranscriptionService:
                 if on_progress:
                     on_progress(pct)
 
-            text = self.transcribe(wav, job_id, update_progress)
+            # on_progress is the callback; callers may pass a cancel_event in kwargs
+            cancel_event = None
+            # If caller provided a cancel_event through attribute on_progress (routes sets mapping),
+            # it should pass it explicitly when calling process. We support an attribute on this
+            # object (not ideal but keeps backward compatibility). Instead callers should pass
+            # a keyword arg named 'cancel_event' when invoking process.
+            # For now, inspect for an attribute set on self (not used normally) and default to None.
+            # The routes layer will pass cancel_event via kwargs by updating this method signature
+            # in-place; for now we accept passing via a reserved attribute set by caller.
+            if hasattr(self, "_cancel_event"):
+                cancel_event = getattr(self, "_cancel_event")
+
+            text = self.transcribe(wav, job_id, update_progress, cancel_event)
             print(f"[job:{job_id[:8]}] done — {len(text)} chars")
 
             if on_progress:
                 on_progress(100)
 
             return "done", text
+
+        except JobCancelledError:
+            return "cancelled", "cancelled by user"
 
         except Exception as e:
             import traceback
