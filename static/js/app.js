@@ -44,6 +44,9 @@ const state = {
   // Track which jobs we've auto-triggered AI for to avoid duplicates
   aiTriggeredJobs: new Set(),
 
+  // Reader for any active streaming AI request (so we can cancel it)
+  currentAIReader: null,
+
   // Prefs
   autoFixEnabled: localStorage.getItem("autoFixEnabled") === "true",
 
@@ -71,6 +74,7 @@ const dom = {
   emptyState: document.getElementById("empty-state"),
   processingOverlay: document.getElementById("processing-overlay"),
   processingLabel: document.getElementById("processing-label"),
+  processingCancel: document.getElementById("processing-cancel"),
   progressBarFill: document.getElementById("progress-bar-fill"),
   progressPct: document.getElementById("progress-pct"),
   progressElapsed: document.getElementById("progress-elapsed"),
@@ -103,6 +107,7 @@ const dom = {
   chatRecordBtn: document.getElementById("chat-record-btn"),
   chatAppendBtn: document.getElementById("chat-append-btn"),
   chatUploadBtn: document.getElementById("chat-upload-btn"),
+  overlayRecordBtn: document.getElementById("overlay-record-btn"),
   // Jobs drawer
   btnToggleJobsDrawer: document.getElementById("btn-toggle-jobs-drawer"),
   jobsDrawer: document.getElementById("jobs-drawer"),
@@ -120,6 +125,19 @@ function toast(msg, type = "info") {
   t.textContent = msg;
   document.getElementById("toast-container").appendChild(t);
   setTimeout(() => t.remove(), 4000);
+}
+
+
+// ─── Recording overlay helpers ─────────────────────────────────────────────
+
+function showRecordOverlay() {
+  const overlay = document.getElementById("record-overlay");
+  if (overlay) overlay.style.display = "flex";
+}
+
+function hideRecordOverlay() {
+  const overlay = document.getElementById("record-overlay");
+  if (overlay) overlay.style.display = "none";
 }
 
 // ─── AI Mode Management ──────────────────────────────────────────────────
@@ -218,6 +236,7 @@ if (dom.recordBtn) dom.recordBtn.addEventListener("click", toggleRecord);
 if (dom.appendBtn) dom.appendBtn.addEventListener("click", toggleAppendRecord);
 if (dom.chatRecordBtn) dom.chatRecordBtn.addEventListener("click", toggleRecord);
 if (dom.chatAppendBtn) dom.chatAppendBtn.addEventListener("click", toggleAppendRecord);
+if (dom.overlayRecordBtn) dom.overlayRecordBtn.addEventListener("click", stopRecording);
 
 async function toggleAppendRecord() {
   if (!state.activeJobId) {
@@ -236,6 +255,7 @@ async function toggleRecord() {
 }
 
 async function startRecording(isAppend = false) {
+  showRecordOverlay();
   state.appendMode = isAppend;
   state.appendJobId = isAppend ? state.activeJobId : null;
 
@@ -244,6 +264,7 @@ async function startRecording(isAppend = false) {
       audio: true,
     });
   } catch (e) {
+    hideRecordOverlay();
     toast(`Microphone access denied: ${e.message}`, "error");
     return;
   }
@@ -280,6 +301,7 @@ async function startRecording(isAppend = false) {
   state.timerInterval = setInterval(updateTimer, 500);
   if (dom.recordBtn) dom.recordBtn.classList.add("recording");
   if (dom.chatRecordBtn) dom.chatRecordBtn.classList.add("recording");
+  if (dom.overlayRecordBtn) dom.overlayRecordBtn.classList.add("recording");
   if (dom.appendBtn) dom.appendBtn.classList.toggle("recording", isAppend);
   if (dom.chatAppendBtn) dom.chatAppendBtn.classList.toggle("recording", isAppend);
   // Apply inline styles as a fallback if CSS isn't applied/loaded.
@@ -300,12 +322,14 @@ async function startRecording(isAppend = false) {
 }
 
 function stopRecording() {
+  hideRecordOverlay();
   if (state.mediaRecorder?.state !== "inactive") state.mediaRecorder.stop();
   state.recordStream?.getTracks().forEach((t) => t.stop());
   clearInterval(state.timerInterval);
   cancelAnimationFrame(state.animFrame);
   if (dom.recordBtn) dom.recordBtn.classList.remove("recording");
   if (dom.chatRecordBtn) dom.chatRecordBtn.classList.remove("recording");
+  if (dom.overlayRecordBtn) dom.overlayRecordBtn.classList.remove("recording");
   if (dom.chatRecordBtn) {
     dom.chatRecordBtn.style.animation = "";
     dom.chatRecordBtn.style.boxShadow = "";
@@ -592,12 +616,18 @@ function watchJob(id) {
       }
 
       // 3. Handle Lifecycle States
-      if (progress.stage === "done" || progress.stage === "error") {
+      if (progress.stage === "done" || progress.stage === "error" || progress.stage === "cancelled") {
         eventSource.close();
         stopElapsedTimer();
         setHeaderProgress("", 0, { hide: true });
 
         if (progress.stage === "done") {
+          // mark job as already-triggered right away to prevent later
+          // polling handlers from duplicating the AI request
+          if (!state.aiTriggeredJobs.has(id)) {
+            state.aiTriggeredJobs.add(id);
+          }
+
           fetch(`/api/status/${id}`)
             .then(r => r.json())
             .then(async (job) => {
@@ -612,7 +642,7 @@ function watchJob(id) {
               // in the chat without requiring manual copy/paste.
               try {
                 if ((!job.ai_results || job.ai_results.length === 0) && job.transcript) {
-                  // Avoid double-triggering for the same job
+                  // Avoid double-triggering for the same job (guard still in place)
                   if (!state.aiTriggeredJobs.has(id)) {
                     state.aiTriggeredJobs.add(id);
                     // Ensure a sensible AI mode is selected before invoking AI
@@ -624,6 +654,10 @@ function watchJob(id) {
                 }
               } catch (e) {
                 console.warn("Auto AI action failed:", e);
+                // if the automatic request failed we may want to allow a retry
+                // by removing the flag; leaving it in place would block manual
+                // retries too, so clear it here
+                state.aiTriggeredJobs.delete(id);
               }
 
                     // Only run auto-fix if the user has enabled it AND the selected
@@ -632,6 +666,9 @@ function watchJob(id) {
                       triggerAutoFix(id, job.transcript);
                     }
             });
+        } else if (progress.stage === "cancelled") {
+          toast("Job cancelled", "info");
+          if (state.activeJobId === id) dom.processingOverlay.classList.remove("active");
         } else {
           toast(`Job failed: ${progress.message}`, "error");
           if (state.activeJobId === id) {
@@ -643,8 +680,10 @@ function watchJob(id) {
         delete state.jobStartTime[id];
         delete state.lastUpdateTime[id];
         delete state.lastProgress[id];
-        // Allow re-triggering later if job is rerun
-        state.aiTriggeredJobs.delete(id);
+        // note: we intentionally no longer clear aiTriggeredJobs here; the flag
+        // serves to prevent duplicate auto‑requests.  jobs are short‑lived so
+        // memory use is negligible.  if the job is recreated later it will get a
+        // new id, rendering this irrelevant.
       }
     } catch (e) {
       console.error("Error parsing progress payload:", e);
@@ -683,13 +722,14 @@ function watchJobPoll(id) {
       state.lastUpdateTime[id] = Date.now();
     }
 
-    if (job.status === "done" || job.status === "error") {
+    if (job.status === "done" || job.status === "error" || job.status === "cancelled") {
       clearInterval(poll);
       stopElapsedTimer();
       delete state.jobStartTime[id];
       delete state.lastUpdateTime[id];
       delete state.lastProgress[id];
-        state.aiTriggeredJobs.delete(id);
+      // do not clear aiTriggeredJobs here; the ID flag persists until the job
+      // is removed or recreated so that auto‑AI only runs once.
       setHeaderProgress("", 0, { hide: true });
 
       if (job.status === "done") {
@@ -1024,6 +1064,8 @@ async function aiAction(overrideText = null, overrideMode = null) {
     }
 
     const reader = response.body.getReader();
+    // keep reference so user can cancel streaming AI requests
+    state.currentAIReader = reader;
     const decoder = new TextDecoder();
     let fullText = "";
 
@@ -1069,12 +1111,14 @@ async function aiAction(overrideText = null, overrideMode = null) {
     setHeaderProgress("", 0, { hide: true });
     toast(e.message || `AI request failed: ${e}`, "error");
     renderAiResults([]);
-  } finally {
+    } finally {
     btn.disabled = false;
     btn.textContent = origText;
     setEditorButtons(true);
     if (dom.chatInput) dom.chatInput.disabled = false;
     if (dom.chatSend) dom.chatSend.disabled = false;
+    // clear streaming reader reference
+    state.currentAIReader = null;
   }
 }
 
@@ -1168,6 +1212,8 @@ async function triggerAutoFix(jobId, transcript) {
     }
 
     const reader = response.body.getReader();
+    // allow cancellation of this streaming request
+    state.currentAIReader = reader;
     const decoder = new TextDecoder();
     let fullText = "";
     let fakeProgress = 10;
@@ -1216,6 +1262,7 @@ async function triggerAutoFix(jobId, transcript) {
     }
 
     clearInterval(fakeInterval);
+    state.currentAIReader = null;
 
     // Refresh AI panel with actual saved results
     const res2 = await fetch(`/api/status/${jobId}`);
@@ -1548,4 +1595,29 @@ if (dom.btnToggleJobsDrawer && dom.jobsDrawer) {
   });
   if (dom.jobsDrawerBackdrop) dom.jobsDrawerBackdrop.addEventListener('click', closeDrawer);
   if (dom.jobsDrawerClose) dom.jobsDrawerClose.addEventListener('click', closeDrawer);
+}
+
+// Processing cancel button: request server to cancel active job and abort any active AI stream
+if (dom.processingCancel) {
+  dom.processingCancel.addEventListener('click', async () => {
+    const id = state.activeJobId;
+    if (!id) return;
+    try {
+      // Tell server to cancel (idempotent)
+      await fetch(`/api/jobs/${id}/cancel`, { method: 'POST' });
+      toast('Cancellation requested', 'info');
+    } catch (e) {
+      console.warn('Cancel request failed', e);
+    }
+
+    // Abort any active AI streaming reader on the client
+    if (state.currentAIReader) {
+      try {
+        state.currentAIReader.cancel();
+      } catch (e) {
+        // ignore
+      }
+      state.currentAIReader = null;
+    }
+  });
 }

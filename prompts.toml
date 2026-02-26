@@ -25,6 +25,20 @@ rules = [
 input_placeholder = "Text: {text}"
 
 
+[prompts.article]
+display_name = "Article"
+instruction = "This is a transcription. Fix the text without changing my wording."
+rules = [
+  "Fix grammar, spelling, capitalization, spacing, and punctuation only.",
+  "Do not change, remove, or add any words or sentences I used.",
+  "Do not reorder sentences.",
+  "Insert paragraph breaks between distinct ideas or concepts where it improves readability.",
+  "Allowed exceptions: You may correct spelling mistakes, adjust spacing/line breaks, and apply markdown formatting ONLY when explicitly requested.",
+  "These are words that can be used to correct names or other things: {names}. If a name/word appears in the text, check against this list.",
+  "Just write the modified text and nothing else.",
+]
+input_placeholder = "Text: {text}"
+
 [prompts.summarize]
 display_name = "Summarize"
 instruction = "Summarize the transcript clearly and concisely."

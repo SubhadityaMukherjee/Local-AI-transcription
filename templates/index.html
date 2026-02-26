@@ -98,6 +98,7 @@
             <div class="processing-label" id="processing-label">
               Processing…
             </div>
+              <button class="btn btn-ghost" id="processing-cancel" title="Cancel" style="margin-left:8px">✕ Cancel</button>
             <div class="progress-block">
               <div class="progress-bar-track">
                 <div class="progress-bar-fill" id="progress-bar-fill"></div>
@@ -110,6 +111,14 @@
             </div>
           </div>
         </div>
+
+          <!-- fullscreen recording overlay (ChatGPT-style) -->
+          <div class="record-overlay" id="record-overlay">
+            <button class="record-btn large" id="overlay-record-btn">
+              <span class="dot"></span>
+            </button>
+          </div>
+
       </main>
     </div>
 

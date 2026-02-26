@@ -88,3 +88,28 @@ def test_add_new_mode(client=None):
     )
     assert resp3.status_code == 400
     assert "already exists" in resp3.get_json().get("error", "")
+
+def test_rerun_uses_stored_transcript(client=None, monkeypatch=None):
+    """Calling the AI endpoint with a job_id but no text should reuse
+    the transcript stored on the job record.
+    """
+    if client is None:
+        client = app.test_client()
+    # create a dummy job and give it a transcript
+    job = app.job_store.create("foo.wav")
+    app.job_store.update(job["id"], transcript="hello world")
+
+    # stub out the AI service so we can inspect the input text
+    def fake_process(text, mode, names=None):
+        return f"processed:{text}"
+
+    monkeypatch.setattr(app.ai_service, "process", fake_process)
+
+    resp = client.post(
+        "/api/ai",
+        data=json.dumps({"mode": "summarize", "job_id": job["id"]}),
+        content_type="application/json",
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["result"] == "processed:hello world"
