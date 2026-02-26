@@ -622,12 +622,6 @@ function watchJob(id) {
         setHeaderProgress("", 0, { hide: true });
 
         if (progress.stage === "done") {
-          // mark job as already-triggered right away to prevent later
-          // polling handlers from duplicating the AI request
-          if (!state.aiTriggeredJobs.has(id)) {
-            state.aiTriggeredJobs.add(id);
-          }
-
           fetch(`/api/status/${id}`)
             .then(r => r.json())
             .then(async (job) => {
