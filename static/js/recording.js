@@ -10,32 +10,63 @@ function mimeToExt(mimeType) {
   return "webm";
 }
 
-function drawWaveform() {
-  if (!ctx2d || !dom.waveformCanvas || !state.analyser) return;
-  state.animFrame = requestAnimationFrame(drawWaveform);
-  const data = new Uint8Array(state.analyser.frequencyBinCount);
-  state.analyser.getByteTimeDomainData(data);
-  const W = dom.waveformCanvas.offsetWidth;
-  const H = dom.waveformCanvas.offsetHeight;
-  dom.waveformCanvas.width = W;
-  dom.waveformCanvas.height = H;
-  ctx2d.clearRect(0, 0, W, H);
-  ctx2d.strokeStyle = "#c4a882";
-  ctx2d.lineWidth = 1.5;
-  ctx2d.beginPath();
-  const step = W / data.length;
-  data.forEach((v, i) => {
-    const y = (v / 128.0) * (H / 2);
-    i === 0 ? ctx2d.moveTo(0, y) : ctx2d.lineTo(i * step, y);
-  });
-  ctx2d.stroke();
-}
-
 function updateTimer() {
   const s = Math.floor((Date.now() - state.recordStart) / 1000);
   if (dom.timerEl)
     dom.timerEl.textContent = `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 }
+
+// ─── Audio-Reactive Orb ───────────────────────────────────────────────────────
+
+function startOrbAnimation() {
+  const orb = document.getElementById("orb-core");
+  const container = document.getElementById("orb-container");
+  if (!orb || !container) return;
+
+  container.classList.remove("idle");
+  const rings = Array.from(container.querySelectorAll(".orb-ring"));
+
+  function tick() {
+    if (!state.analyser) return;
+    state.animFrame = requestAnimationFrame(tick);
+
+    const data = new Uint8Array(state.analyser.frequencyBinCount);
+    state.analyser.getByteFrequencyData(data);
+
+    // Use lower half of spectrum (voice frequencies)
+    const slice = data.slice(0, Math.floor(data.length / 2));
+    const avg = slice.reduce((a, b) => a + b, 0) / slice.length;
+    const level = Math.min(avg / 80, 1); // 0–1
+
+    const coreScale = 1 + level * 0.28;
+    orb.style.transform = `scale(${coreScale})`;
+    orb.style.boxShadow = `0 0 ${20 + level * 50}px rgba(196,168,130,${0.25 + level * 0.6})`;
+
+    if (rings[0]) rings[0].style.transform = `scale(${1 + level * 0.15})`;
+    if (rings[1]) rings[1].style.transform = `scale(${1 + level * 0.28})`;
+    if (rings[2]) rings[2].style.transform = `scale(${1 + level * 0.42})`;
+  }
+
+  tick();
+}
+
+function stopOrbAnimation() {
+  const orb = document.getElementById("orb-core");
+  const container = document.getElementById("orb-container");
+
+  cancelAnimationFrame(state.animFrame);
+
+  if (orb) {
+    orb.style.transform = "";
+    orb.style.boxShadow = "";
+  }
+  if (container) {
+    container.querySelectorAll(".orb-ring").forEach((r) => (r.style.transform = ""));
+    container.classList.add("idle");
+  }
+}
+
+// ─── Start / Stop ─────────────────────────────────────────────────────────────
 
 async function startRecording(isAppend = false) {
   showRecordOverlay();
@@ -57,7 +88,9 @@ async function startRecording(isAppend = false) {
   state.analyser = audioCtx.createAnalyser();
   state.analyser.fftSize = 256;
   source.connect(state.analyser);
-  drawWaveform();
+
+  // Start audio-reactive orb (replaces old waveform + button pulse)
+  startOrbAnimation();
 
   const mimeType = getSupportedMimeType();
   try {
@@ -83,14 +116,10 @@ async function startRecording(isAppend = false) {
   if (dom.appendBtn) dom.appendBtn.classList.toggle("recording", isAppend);
   if (dom.chatAppendBtn) dom.chatAppendBtn.classList.toggle("recording", isAppend);
 
-  if (dom.chatRecordBtn) {
-    dom.chatRecordBtn.style.animation = "pulse 1.2s infinite ease-in-out";
-    dom.chatRecordBtn.style.boxShadow = "0 0 0 6px rgba(196, 168, 130, 0.12)";
-  }
-  if (dom.chatAppendBtn && isAppend) {
-    dom.chatAppendBtn.style.animation = "pulse 1.2s infinite ease-in-out";
-    dom.chatAppendBtn.style.boxShadow = "0 0 0 6px rgba(196, 168, 130, 0.12)";
-  }
+  // Update overlay status text
+  const voiceStatus = document.getElementById("voice-status");
+  if (voiceStatus) voiceStatus.textContent = isAppend ? "Appending…" : "Listening…";
+
   if (dom.statusEl) {
     dom.statusEl.textContent = isAppend ? "Appending… click to stop" : "Recording… click to stop";
     dom.statusEl.classList.add("active");
@@ -102,19 +131,24 @@ function stopRecording() {
   if (state.mediaRecorder?.state !== "inactive") state.mediaRecorder.stop();
   state.recordStream?.getTracks().forEach((t) => t.stop());
   clearInterval(state.timerInterval);
-  cancelAnimationFrame(state.animFrame);
+
+  // Stop orb animation
+  stopOrbAnimation();
 
   if (dom.recordBtn) dom.recordBtn.classList.remove("recording");
   if (dom.chatRecordBtn) dom.chatRecordBtn.classList.remove("recording");
   if (dom.overlayRecordBtn) dom.overlayRecordBtn.classList.remove("recording");
-  if (dom.chatRecordBtn) { dom.chatRecordBtn.style.animation = ""; dom.chatRecordBtn.style.boxShadow = ""; }
   if (dom.appendBtn) dom.appendBtn.classList.remove("recording");
   if (dom.chatAppendBtn) dom.chatAppendBtn.classList.remove("recording");
-  if (dom.chatAppendBtn) { dom.chatAppendBtn.style.animation = ""; dom.chatAppendBtn.style.boxShadow = ""; }
-  if (dom.statusEl) { dom.statusEl.textContent = "Uploading…"; dom.statusEl.classList.remove("active"); }
+
+  if (dom.statusEl) {
+    dom.statusEl.textContent = "Uploading…";
+    dom.statusEl.classList.remove("active");
+  }
   if (dom.timerEl) dom.timerEl.textContent = "";
-  if (ctx2d && dom.waveformCanvas) ctx2d.clearRect(0, 0, dom.waveformCanvas.width, dom.waveformCanvas.height);
 }
+
+// ─── Submit ───────────────────────────────────────────────────────────────────
 
 async function submitRecording() {
   const mimeType = state.mediaRecorder?.mimeType || "audio/webm";
@@ -158,6 +192,8 @@ async function submitRecording() {
   if (dom.statusEl) dom.statusEl.textContent = "Click to start recording";
 }
 
+// ─── Toggle Helpers ───────────────────────────────────────────────────────────
+
 async function toggleRecord() {
   state.mediaRecorder?.state === "recording" ? stopRecording() : await startRecording();
 }
@@ -170,10 +206,16 @@ async function toggleAppendRecord() {
   state.mediaRecorder?.state === "recording" ? stopRecording() : await startRecording(true);
 }
 
+// ─── Init ─────────────────────────────────────────────────────────────────────
+
 function initRecording() {
   if (dom.recordBtn) dom.recordBtn.addEventListener("click", toggleRecord);
   if (dom.appendBtn) dom.appendBtn.addEventListener("click", toggleAppendRecord);
   if (dom.chatRecordBtn) dom.chatRecordBtn.addEventListener("click", toggleRecord);
   if (dom.chatAppendBtn) dom.chatAppendBtn.addEventListener("click", toggleAppendRecord);
   if (dom.overlayRecordBtn) dom.overlayRecordBtn.addEventListener("click", stopRecording);
+
+  // Start orb in idle breathing state
+  const container = document.getElementById("orb-container");
+  if (container) container.classList.add("idle");
 }

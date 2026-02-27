@@ -437,6 +437,7 @@ dependencies = [
     { name = "pytest" },
     { name = "python-dotenv" },
     { name = "torch" },
+    { name = "whispercpp" },
 ]
 
 [package.metadata]
@@ -450,6 +451,7 @@ requires-dist = [
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "python-dotenv", specifier = ">=1.2.1" },
     { name = "torch", specifier = ">=2.10.0" },
+    { name = "whispercpp", specifier = ">=0.0.17" },
 ]
 
 [[package]]
@@ -1373,3 +1375,9 @@ sdist = { url = "https://files.pythonhosted.org/packages/5a/70/1469ef1d3542ae7c2
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ad/e4/8d97cca767bcc1be76d16fb76951608305561c6e056811587f36cb1316a8/werkzeug-3.1.5-py3-none-any.whl", hash = "sha256:5111e36e91086ece91f93268bb39b4a35c1e6f1feac762c9c822ded0a4e322dc", size = 225025, upload-time = "2026-01-08T17:49:21.859Z" },
 ]
+
+[[package]]
+name = "whispercpp"
+version = "0.0.17"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/2d/9b/690f807441baa32e5165ddadb31a6716549c71d2f91eb62e74dda394dffd/whispercpp-0.0.17.tar.gz", hash = "sha256:174a2c82e0ee7bcc4c21301633df86d7de49395d81d9455a9bedfb0c790813de", size = 3993701, upload-time = "2023-03-22T03:33:24.056Z" }

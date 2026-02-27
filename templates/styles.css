@@ -31,16 +31,7 @@ body {
    margin: 0 auto;
 }
 
-/* Noise texture overlay */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
-  pointer-events: none;
-  z-index: 1000;
-  opacity: 0.4;
-}
+
 
 /* ── Layout ──────────────────────────────────────────────────────── */
 header {
@@ -81,10 +72,7 @@ h1 {
   transition: opacity 0.3s ease;
 }
 
-.header-progress.active,
-.header-progress.ai-progress {
-  opacity: 1;
-}
+
 
 .header-progress-bar-track {
   flex: 1;
@@ -103,12 +91,6 @@ h1 {
   width: 0%;
   box-shadow: 0 0 8px rgba(232, 213, 176, 0.3);
 }
-
-.header-progress.ai-progress .header-progress-bar-fill {
-  background: linear-gradient(90deg, var(--green), #7ee0a8);
-  box-shadow: 0 0 8px rgba(92, 224, 138, 0.3);
-}
-
 .header-progress-label {
   font-family: var(--mono);
   font-size: 0.65rem;
@@ -132,10 +114,7 @@ h1 {
   color: var(--text);
   cursor: pointer;
 }
-.btn-toggle.active {
-  background: var(--green);
-  color: var(--bg);
-}
+
 
 /* toolbar mode selector */
 .mode-selector {
@@ -148,40 +127,13 @@ h1 {
   margin-right: 0.5rem;
 }
 
-.toggle-label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-  font-family: var(--mono);
-  font-size: 0.65rem;
-  color: var(--muted);
-}
+
 
 .toggle-label input {
   display: none;
 }
 
-.toggle-switch {
-  width: 32px;
-  height: 18px;
-  background: var(--border);
-  border-radius: 9px;
-  position: relative;
-  transition: background 0.2s ease;
-}
 
-.toggle-switch::after {
-  content: "";
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 14px;
-  height: 14px;
-  background: var(--muted);
-  border-radius: 50%;
-  transition: all 0.2s ease;
-}
 
 .toggle-label input:checked + .toggle-switch {
   background: var(--green);
@@ -190,14 +142,6 @@ h1 {
 .toggle-label input:checked + .toggle-switch::after {
   left: 16px;
   background: var(--text);
-}
-
-.toggle-text {
-  transition: color 0.2s ease;
-}
-
-.toggle-label:hover .toggle-text {
-  color: var(--text);
 }
 
 /* Header personal names button */
@@ -219,175 +163,6 @@ h1 {
   overflow: hidden;
 }
 
-/* ── RECORD ───────────────────────────────────────────────────────── */
-.record-area {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.8rem;
-  padding: 0.5rem 0;
-}
-
-
-/* Append button */
-.append-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 2px solid var(--border);
-  background: var(--surface2);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-  outline: none;
-  margin-left: 0.5rem;
-}
-
-.append-btn:hover {
-  border-color: var(--green);
-  background: rgba(92, 224, 138, 0.08);
-}
-
-.append-btn.recording {
-  border-color: var(--green);
-  background: rgba(92, 224, 138, 0.15);
-  animation: pulse-ring-green 1.5s ease infinite;
-}
-
-.append-btn .append-icon {
-  font-size: 1.2rem;
-  color: var(--green);
-  font-weight: bold;
-  line-height: 1;
-}
-
-.append-btn.recording .append-icon {
-  color: var(--green);
-}
-
-@keyframes pulse-ring-green {
-  0% {
-    box-shadow: 0 0 0 0 rgba(92, 224, 138, 0.4);
-  }
-  70% {
-    box-shadow: 0 0 0 8px rgba(92, 224, 138, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(92, 224, 138, 0);
-  }
-}
-
-@keyframes pulse-ring {
-  0% {
-    box-shadow: 0 0 0 0 rgba(224, 92, 92, 0.4);
-  }
-  70% {
-    box-shadow: 0 0 0 12px rgba(224, 92, 92, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(224, 92, 92, 0);
-  }
-}
-
-.record-status {
-  font-family: var(--mono);
-  font-size: 0.7rem;
-  color: var(--muted);
-  letter-spacing: 0.04em;
-  text-align: center;
-}
-
-.record-status.active {
-  color: var(--red);
-}
-
-.timer {
-  font-family: var(--mono);
-  font-size: 0.8rem;
-  color: var(--accent);
-  min-height: 1em;
-}
-
-canvas#waveform {
-  width: 100%;
-  height: 36px;
-  border-radius: 4px;
-  background: var(--surface);
-  display: block;
-}
-
-/* ── UPLOAD ───────────────────────────────────────────────────────── */
-.upload-zone {
-  border: 1.5px dashed var(--border);
-  border-radius: 6px;
-  padding: 1.2rem 1rem;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  background: var(--surface);
-  position: relative;
-}
-
-.upload-zone:hover,
-.upload-zone.drag-over {
-  border-color: var(--accent2);
-  background: rgba(232, 213, 176, 0.04);
-}
-
-.upload-zone input[type="file"] {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  cursor: pointer;
-}
-
-.upload-icon {
-  font-size: 1.4rem;
-  margin-bottom: 0.3rem;
-}
-.upload-hint {
-  font-size: 0.72rem;
-  color: var(--muted);
-  margin-top: 0.2rem;
-}
-
-/* ── JOBS ─────────────────────────────────────────────────────────── */
-.jobs-section-header {
-  padding: 0.75rem 1rem 0;
-  flex-shrink: 0;
-}
-
-.jobs-section-label {
-  font-family: var(--mono);
-  font-size: 0.65rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--muted);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-  user-select: none;
-  padding-bottom: 0.6rem;
-}
-
-.jobs-section-label::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: var(--border);
-}
-
-.jobs-section-label .toggle-icon {
-  font-size: 0.6rem;
-  transition: transform 0.2s ease;
-}
-
-.jobs-section-label.collapsed .toggle-icon {
-  transform: rotate(-90deg);
-}
 
 .jobs-list {
   flex: 1;
@@ -401,22 +176,7 @@ canvas#waveform {
     opacity 0.25s ease;
 }
 
-.jobs-list.collapsed {
-  max-height: 0;
-  overflow: hidden;
-  padding: 0 0.5rem;
-  opacity: 0;
-}
 
-.jobs-list:not(.collapsed):empty::after {
-  content: "No jobs yet";
-  font-family: var(--mono);
-  font-size: 0.72rem;
-  color: var(--muted);
-  text-align: center;
-  margin-top: 1rem;
-  display: block;
-}
 
 .job-item {
   background: var(--surface);
@@ -432,11 +192,6 @@ canvas#waveform {
 .job-item:hover {
   border-color: var(--accent2);
 }
-.job-item.active {
-  border-color: var(--accent);
-  background: rgba(232, 213, 176, 0.05);
-}
-
 .job-name {
   font-size: 0.65rem;
   font-weight: 500;
@@ -460,28 +215,6 @@ canvas#waveform {
   border-radius: 100px;
   text-transform: uppercase;
 }
-
-.status-queued {
-  background: rgba(122, 120, 128, 0.2);
-  color: var(--muted);
-}
-.status-converting {
-  background: rgba(232, 213, 176, 0.1);
-  color: var(--accent2);
-}
-.status-transcribing {
-  background: rgba(92, 224, 138, 0.1);
-  color: var(--green);
-}
-.status-done {
-  background: rgba(92, 224, 138, 0.15);
-  color: var(--green);
-}
-.status-error {
-  background: rgba(224, 92, 92, 0.15);
-  color: var(--red);
-}
-
 .job-progress {
   position: absolute;
   bottom: 0;
@@ -737,18 +470,6 @@ canvas#waveform {
   cursor: pointer;
   font-size: 0.95rem;
 }
-.chat-upload-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 36px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--surface2);
-  color: var(--text);
-  cursor: pointer;
-  font-size: 0.95rem;
 }
 .chat-record-btn .dot-small {
   color: var(--red);
@@ -1342,11 +1063,6 @@ canvas#waveform {
   transition: opacity 0.2s ease;
 }
 
-.live-text {
-  color: var(--accent-gold); /* or whatever your brand color is */
-  font-style: italic;
-  font-size: 0.9em;
-}
 .record-overlay {
   display: none;
   position: fixed;
@@ -1358,8 +1074,6 @@ canvas#waveform {
   justify-content: center;
   flex-direction: column;
 }
-.record-overlay.active { display: flex; }
-
 .voice-ui {
   display: flex;
   flex-direction: column;
@@ -1420,18 +1134,6 @@ canvas#waveform {
   margin: 0;
 }
 
-.stop-btn {
-  padding: 0.5rem 2rem;
-  border: 1px solid rgba(196,168,130,0.3);
-  background: transparent;
-  color: rgba(196,168,130,0.6);
-  border-radius: 999px;
-  font-size: 0.8rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: all 0.2s;
-}
 .stop-btn:hover {
   background: rgba(196,168,130,0.1);
   color: rgba(196,168,130,1);
