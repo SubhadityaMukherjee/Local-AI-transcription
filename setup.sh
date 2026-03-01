@@ -16,8 +16,7 @@ err() {
 }
 section() { echo -e "\n${BOLD}── $* ──${RESET}"; }
 
-# Model used for summarize / grammar fix — fast and high quality on M-series
-OLLAMA_MODEL="llama3.2"
+OLLAMA_MODEL="gpt-oss:20b"
 
 # ── 0. Prereq checks ──────────────────────────────────────────────────────────
 section "Checking prerequisites"

@@ -76,13 +76,17 @@ class AIService:
         placeholder = prompt_config.get("input_placeholder", "{text}")
 
         if "formatting_rules" in prompt_config:
-            rules_text = "\n".join(f"- {rule}" for rule in prompt_config["formatting_rules"])
+            rules_text = "\n".join(
+                f"- {rule}" for rule in prompt_config["formatting_rules"]
+            )
             return f"Task: {instruction}\n\nFormatting rules:\n{rules_text}\n\n{placeholder}"
         elif "rules" in prompt_config:
             rules_text = "\n".join(
                 f"{i+1}. {rule}" for i, rule in enumerate(prompt_config["rules"])
             )
-            return f"Task: {instruction}\n\nInstructions:\n{rules_text}\n\n{placeholder}"
+            return (
+                f"Task: {instruction}\n\nInstructions:\n{rules_text}\n\n{placeholder}"
+            )
         else:
             return f"Task: {instruction}\n\n{placeholder}"
 
@@ -91,7 +95,9 @@ class AIService:
         template = self.get_prompt(mode)
         names_str = ", ".join(names) if names else ""
         # Use safe format_map so missing placeholders (e.g. {names} not in template) don't crash
-        return template.format_map({"text": text, "names": names_str})
+        prompt = template.format_map({"text": text, "names": names_str})
+        print(prompt)
+        return prompt
 
     def process(self, text: str, mode: str = "summarize", names: list = None) -> str:
         """
@@ -255,9 +261,13 @@ class AIService:
         if "instruction" in prompt_config:
             lines.append(f"instruction = {json.dumps(prompt_config['instruction'])}")
         if "input_placeholder" in prompt_config:
-            lines.append(f"input_placeholder = {json.dumps(prompt_config['input_placeholder'])}")
+            lines.append(
+                f"input_placeholder = {json.dumps(prompt_config['input_placeholder'])}"
+            )
         if "formatting_rules" in prompt_config:
-            lines.append(f"formatting_rules = {json.dumps(prompt_config['formatting_rules'])}")
+            lines.append(
+                f"formatting_rules = {json.dumps(prompt_config['formatting_rules'])}"
+            )
         if "rules" in prompt_config:
             lines.append(f"rules = {json.dumps(prompt_config['rules'])}")
 
