@@ -1,14 +1,11 @@
 # Local-AI-transcription
 
-I wanted to build a customizable frontend for Whisper.cpp. I know there are a lot of them, but this works for my own quirks
-
-- Note that a bunch of this was vibe coded using Claude/other local models. Please do not try to use this in production. This is at the moment meant to be a local utility only!!
-  <img width="1779" height="1052" alt="SCR-20260220-pdzq" src="https://github.com/user-attachments/assets/1a8b98ac-45d0-44b5-aee1-354901fb0907" />
-  <img width="956" height="292" alt="SCR-20260220-pjwc" src="https://github.com/user-attachments/assets/d6a9fd9e-3ca0-4f1a-90f3-e59b491b6cb0" />
+I wanted to build a customizable CLI for Whisper.cpp that uses a Local LLM to do post-processing on the transcripts with modes/personal names etc. So here it is.
 
 ## Setup
 
 - Make sure you have installed `uv` and `ollama` and `git` and `ffmpeg` on your machine
+- If you are on linux - install `sudo apt install arecord`. If you are on mac `brew install sox`
 - Clone this repo
 - I have ONLY tested this out on a Mac with an M chip. I was not trying to make it a universal tool yet
 - Once you have all this, run `./setup.sh` in this directory
@@ -16,71 +13,87 @@ I wanted to build a customizable frontend for Whisper.cpp. I know there are a lo
 
 ## Usage
 
-### Recording & Transcription
+### CLI Usage
 
-If you are on linux - install `sudo apt install arecord`. If you are on mac `brew install sox`
+The project includes a CLI for scripting and batch operations. Use `python cli.py --help` for full documentation.
 
-1. **Record Audio**: Click the red record button to start recording from your microphone. Click again to stop.
-2. **Append Recording**: Click the green `+` button to append new recording to an existing job.
-3. **Upload File**: Drag and drop or click to upload audio/video files (mp3, wav, flac, m4a, mp4, mkv, mov).
+#### Basic Commands
 
-### Auto-Fix Toggle
+**Record audio from your microphone:**
+```bash
+python cli.py record
+python cli.py record grammar              # Record and run AI grammar check
+python cli.py record -d 10                # Record for 10 seconds
+python cli.py record --out /path/to/file.wav
+```
 
-In the header, there's a toggle switch labeled **"Auto-fix on complete"**. When enabled:
+**Transcribe an existing audio/video file:**
+```bash
+python cli.py transcribe /path/to/file.mp3
+python cli.py transcribe /path/to/file.mp3 grammar      # Transcribe and run AI mode
+python cli.py transcribe /path/to/file.mp3 --out result.txt
+python cli.py transcribe /path/to/file.mp3 --names "john,mary"
+```
 
-- The AI will automatically run the "Auto fix text" (grammar/structure fix) action when transcription completes
-- This saves you a click after each recording
-- The setting persists in your browser's localStorage
+**Manage transcription jobs:**
+```bash
+python cli.py jobs                        # List all jobs
+python cli.py jobs --limit 50             # List last 50 jobs
+python cli.py jobs --id <job-uuid>        # Show full details of a job
+python cli.py jobs --delete <job-uuid>    # Delete a specific job
+python cli.py jobs --clear                # Delete all completed/errored jobs
+```
 
-### Progress Tracking
+**View and run AI modes:**
+```bash
+python cli.py modes                       # List all available AI modes
+python cli.py ai <job-uuid> grammar       # Run AI grammar check on existing job
+python cli.py ai <job-uuid> summarize     # Run AI summarization on existing job
+python cli.py ai <job-uuid> grammar --names "john,mary"
+```
 
-- The **header progress bar** shows transcription progress (Queued → Converting → Transcribing)
-- When auto-fix runs, the progress bar turns green to show AI processing status
-- This is visible even when the jobs panel is collapsed
+#### Options
 
-### AI Actions
+- `--verbose` or `-v`: Enable debug logging (shows SQL queries, detailed progress)
+- `--db`: Use SQLAlchemy job store instead of JSON (requires DATABASE_URL env var)
 
-Once a transcript is ready, the toolbar will show a **mode selector** along with a
-single action button. The selector is populated from `prompts.toml` on the
-server and you can choose between any of the configured modes (summarize,
-grammar, or your own custom modes). Click **+ Mode** to define a new mode using
-a simple form; the new prompt will be appended to `prompts.toml` and available
-immediately.
+#### Examples
 
-The action button label updates to reflect the currently selected mode, and
-after processing the right‑hand panel will show results tagged with the mode it
-used.
+**Record and auto-fix transcript in one command:**
+```bash
+python cli.py record grammar
+```
 
-Additional toolbar controls:
+**Transcribe batch of files:**
+```bash
+for file in recordings/*.mp3; do
+  echo "Processing $file..."
+  python cli.py transcribe "$file" grammar
+done
+```
 
-- **Copy**: Copy transcript to clipboard
-- **Export Markdown**: Download as `.md` file
-- **Custom names/words**: There is also an option to add personal names. If you
-  find that the AI mispronounces or misunderstands some names or words, you can
-  add them in and they will be saved. The LLM will consult this list when
-  fixing transcripts.
+**Transcribe in verbose mode (see detailed logs):**
+```bash
+python cli.py -v transcribe /path/to/file.mp3
+```
 
-### AI Results Panel
+## Features
 
-The right panel shows your AI processing history:
-
-- Click to expand/collapse results
-- Use Copy or Export buttons for each result
-- Delete unwanted results with the ✕ button
+- Records from microphone (fixed duration or manual stop)
+- Transcribes audio/video files (mp3, wav, flac, m4a, mp4, mkv, mov)
+- Stores jobs with progress tracking and history
+- AI post-processing with configurable modes (grammar fix, summarization, custom)
+- Supports custom names/words for better recognition
+- Progress bars and real-time updates
+- SQL or JSON job storage
 
 ## Customizing Prompts
 
-The `prompts.toml` file controls the set of **modes** that the AI can run. Each
-mode corresponds to a top‑level section under `[prompts]` and the UI will
-populate a selector based on the file. The list is displayed in the same order
-the modes appear in `prompts.toml` (not sorted alphabetically), so you can
-easily organize them however you like. You **can** edit `prompts.toml` by hand
-and restart the server, or create new modes directly from the web interface.
+The `prompts.toml` file controls the set of **AI modes**. Each mode corresponds to a top-level section under `[prompts]`. The CLI will use these modes.
 
-Below are examples of the built‑in modes:
+### Example Modes
 
-### Summarize Prompt
-
+**Summarize Prompt:**
 ```toml
 [prompts.summarize]
 instruction = "Your instructions here."
@@ -91,8 +104,7 @@ formatting_rules = [
 input_placeholder = "Transcript: {text}"
 ```
 
-### Grammar/Auto-fix Prompt
-
+**Grammar/Auto-fix Prompt:**
 ```toml
 [prompts.grammar]
 instruction = "Your instructions here."
@@ -110,16 +122,7 @@ input_placeholder = "Text: {text}"
 - **rules** (for grammar): Numbered list of processing rules
 - **input_placeholder**: Template for input text (`{text}` is replaced with transcript)
 
-### Example: Custom Grammar Rules
-
-To add custom structural commands, add them to the grammar rules:
-
-```toml
-[rules]
-# Your custom rules here
-```
-
-Available structural commands in default config:
+### Available Structural Commands
 
 - `begin list` / `end list` - Bullet lists
 - `begin sublist` / `end sublist` - Indented sub-items
@@ -130,4 +133,4 @@ Available structural commands in default config:
 - `begin quote` / `end quote` - Blockquotes
 - `begin code` / `end code` - Fenced code blocks
 
-After editing `prompts.toml`, restart the server to apply changes.
+Edit `prompts.toml` directly - changes apply on next run.

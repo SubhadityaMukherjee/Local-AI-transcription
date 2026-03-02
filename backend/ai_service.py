@@ -1,12 +1,16 @@
 """AI service for summarization and text processing (streaming-first)."""
 
 import json
+import logging
 import tomllib as tomli
 import urllib.request as urlreq
 from pathlib import Path
 from typing import Generator
 import codecs
 import ollama
+
+logger = logging.getLogger("whisper_cli.ai_service")
+
 
 
 class AIService:
@@ -16,7 +20,9 @@ class AIService:
         self.config = config
         self._prompts: dict[str, str] = {}
         self._prompt_configs: dict[str, dict] = {}
+        logger.debug("Initializing AIService")
         self._load_prompts()
+        logger.info("AIService initialized with %d modes", len(self._prompts))
 
     # ------------------------------------------------------------------
     # Prompt loading
@@ -28,14 +34,19 @@ class AIService:
 
         prompts_path = Path(__file__).parent.parent / "prompts.toml"
         if not prompts_path.exists():
+            logger.warning("prompts.toml not found at %s", prompts_path)
             return
 
+        logger.debug("Loading prompts from %s", prompts_path)
         with open(prompts_path, "rb") as f:
             config = tomli.load(f)
 
         for mode, prompt_config in config.get("prompts", {}).items():
             self._prompt_configs[mode] = prompt_config.copy()
             self._prompts[mode] = self._build_prompt(prompt_config)
+            logger.debug("Loaded mode: %s", mode)
+        
+        logger.info("Loaded %d AI modes from prompts.toml", len(self._prompts))
 
     def _build_prompt(self, prompt_config: dict) -> str:
         instruction = prompt_config.get("instruction", "")
@@ -91,10 +102,12 @@ class AIService:
 
     def _build_messages(self, text: str, mode: str, names) -> list[dict]:
         if mode not in self._prompt_configs:
+            logger.error("Unknown AI mode: %s", mode)
             raise ValueError(f"Unknown mode: {mode}")
 
         prompt = self.format_prompt(mode, text, names)
         system = self.build_system_prompt(self._prompt_configs[mode], names)
+        logger.debug("Built messages for mode=%s", mode)
 
         return [
             {"role": "system", "content": system},
@@ -107,6 +120,8 @@ class AIService:
 
     def process(self, text: str, mode: str = "summarize", names=None) -> str:
         """Non-streaming API built on top of streaming."""
+        logger.debug("Processing (non-streaming) with mode=%s, text_len=%d", 
+                     mode, len(text))
         return "".join(self.process_stream(text, mode, names))
 
     def process_stream(
@@ -114,22 +129,31 @@ class AIService:
     ) -> Generator[str, None, None]:
 
         if not self.is_configured():
+            logger.error("AI endpoint not configured (AI_BASE_URL not set)")
             raise ValueError("AI endpoint not configured")
 
         names = names if names is not None else self.config.get_personal_names()
+        logger.debug("Processing text with mode=%s (text_len=%d, names=%s)", 
+                     mode, len(text), names)
         messages = self._build_messages(text, mode, names)
 
         # Convert to Ollama message format (same structure)
-        response = ollama.chat(
-            model=self.config.AI_MODEL,
-            messages=messages,
-            stream=True,
-        )
+        try:
+            logger.debug("Calling AI model: %s", self.config.AI_MODEL)
+            response = ollama.chat(
+                model=self.config.AI_MODEL,
+                messages=messages,
+                stream=True,
+            )
 
-        for chunk in response:
-            content = chunk.get("message", {}).get("content")
-            if content:
-                yield content
+            for chunk in response:
+                content = chunk.get("message", {}).get("content")
+                if content:
+                    yield content
+            logger.debug("AI processing completed successfully")
+        except Exception as e:
+            logger.error("AI processing failed: %s", e, exc_info=True)
+            raise
 
     # ------------------------------------------------------------------
     # HTTP helpers
@@ -198,11 +222,14 @@ class AIService:
 
     def add_mode(self, mode: str, prompt_config: dict) -> None:
         if not mode or not mode.replace("_", "").isalnum():
+            logger.warning("Invalid mode name: %s", mode)
             raise ValueError("Mode name must be alphanumeric/underscores")
 
         if mode in self._prompts:
+            logger.warning("Mode already exists: %s", mode)
             raise ValueError(f"Mode '{mode}' already exists")
 
+        logger.info("Adding new AI mode: %s", mode)
         self._prompt_configs[mode] = prompt_config.copy()
         self._prompts[mode] = self._build_prompt(prompt_config)
 
@@ -221,6 +248,7 @@ class AIService:
 
         with open(prompts_path, "a") as f:
             f.write("\n".join(lines) + "\n")
+        logger.info("Mode %s saved to prompts.toml", mode)
 
     # ------------------------------------------------------------------
 

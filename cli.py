@@ -1,33 +1,4 @@
 #!/usr/bin/env python3
-"""
-whisper-cli — Record, transcribe, and AI-process audio from the command line.
-
-Usage examples
---------------
-# Transcribe an existing file
-whisper-cli transcribe audio.mp3
-
-# Transcribe and summarise
-whisper-cli transcribe audio.mp3 --ai summarize
-
-# Record mic → transcribe → summarise (all-in-one)
-whisper-cli record --ai summarize
-
-# Just record (save WAV, no transcription)
-whisper-cli record --no-transcribe --out my_recording.wav
-
-# List recent jobs
-whisper-cli jobs
-
-# Show a specific job
-whisper-cli jobs --id <job-id>
-
-# Clear completed jobs
-whisper-cli jobs --clear
-
-# Show available AI modes
-whisper-cli modes
-"""
 
 import logging
 import os
@@ -63,15 +34,12 @@ logger = logging.getLogger("whisper_cli")
 
 def _load_services(use_db: bool = False):
     """Import and wire up all services."""
-    sys.path.insert(0, str(Path(__file__).parent / "backend"))
-
-    from config import Config  # type: ignore
-    from ai_service import AIService  # type: ignore
-    from transcription_service import TranscriptionService  # type: ignore
+    from backend.config import Config
+    from backend.ai_service import AIService
+    from backend.transcription_service import TranscriptionService
+    from backend.job_store import SQLJobStore
 
     cfg = Config()
-
-    from job_store import SQLJobStore  # type: ignore
 
     store = SQLJobStore(cfg)
     logger.info(
@@ -229,7 +197,7 @@ def _progress_callback(store, job_id: str):
 # ── CLI root ───────────────────────────────────────────────────────────────────
 
 
-@click.group()
+@click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.option("--verbose", "-v", is_flag=True, help="Enable debug logging")
 @click.option(
     "--db",
@@ -239,7 +207,11 @@ def _progress_callback(store, job_id: str):
 )
 @click.pass_context
 def cli(ctx, verbose, db):
-    """Whisper Studio CLI — transcribe & AI-process audio from the terminal."""
+    """
+    🎙  Whisper Studio CLI — Transcribe & process audio with AI
+    
+    Record audio, transcribe with Whisper, and enhance with AI.
+    """
     setup_logging(verbose)
     ctx.ensure_object(dict)
     ctx.obj["db"] = db
@@ -258,13 +230,11 @@ def cli(ctx, verbose, db):
 @click.option("--out", default=None, help="Write transcript to this file")
 @click.pass_context
 def transcribe(ctx, file, mode, names, out):
-    """Transcribe an audio FILE, optionally processing with AI MODE immediately.
-
-    \b
-    Examples:
-      whisper-cli transcribe meeting.mp3
-      whisper-cli transcribe meeting.mp3 summarize
-      whisper-cli transcribe meeting.mp3 action_items --names "Alice,Bob"
+    """📁 Transcribe an audio/video file using Whisper.
+    
+    FILE: Path to audio or video file (mp3, wav, flac, m4a, mp4, mkv, mov)
+    
+    [MODE]: Optional AI mode to run after transcription (e.g., 'grammar', 'summarize')
     """
     ai_mode = mode
     logger.info("=== transcribe command ===")
@@ -330,14 +300,9 @@ def transcribe(ctx, file, mode, names, out):
 )
 @click.pass_context
 def record(ctx, mode, duration, out, names, skip_transcribe):
-    """Record from microphone, transcribe, and optionally process with AI MODE.
-
-    \b
-    Examples:
-      whisper-cli record
-      whisper-cli record summarize
-      whisper-cli record action_items --duration 60
-      whisper-cli record --no-transcribe --out meeting.wav
+    """🎤 Record audio from your microphone and optionally transcribe.
+    
+    [MODE]: Optional AI mode to run after transcription (e.g., 'grammar', 'summarize')
     """
     ai_mode = mode
     logger.info("=== record command ===")
@@ -410,15 +375,7 @@ def record(ctx, mode, duration, out, names, skip_transcribe):
 @click.option("--limit", default=20, show_default=True, help="Max jobs to list")
 @click.pass_context
 def jobs(ctx, job_id, delete_id, clear, limit):
-    """List, inspect, or delete transcription jobs.
-
-    \b
-    Examples:
-      whisper-cli jobs
-      whisper-cli jobs --id <uuid>
-      whisper-cli jobs --delete <uuid>
-      whisper-cli jobs --clear
-    """
+    """📋 List, view, and manage transcription jobs."""
     logger.info("=== jobs command ===")
     _, store, _, _ = _load_services(ctx.obj["db"])
 
@@ -483,7 +440,7 @@ def jobs(ctx, job_id, delete_id, clear, limit):
 @cli.command()
 @click.pass_context
 def modes(ctx):
-    """List available AI processing modes."""
+    """📋 List available AI processing modes configured in prompts.toml."""
     logger.info("=== modes command ===")
     _, _, ai, _ = _load_services(ctx.obj["db"])
 
@@ -518,7 +475,14 @@ def modes(ctx):
 )
 @click.pass_context
 def ai_cmd(ctx, job_id, mode, names):
-    """Run AI processing on an existing job's transcript."""
+    """🤖 Rerun AI processing on an existing transcription.
+    
+    JOB_ID: ID of the transcription job (see 'jobs' command to list)
+    
+    MODE: AI processing mode (e.g., 'grammar', 'summarize')
+    
+    Use this command to re-process a transcript or try a different AI mode.
+    """
     logger.info("=== ai command (job=%s mode=%s) ===", job_id[:8], mode)
     _, store, ai_svc, _ = _load_services(ctx.obj["db"])
 
@@ -601,7 +565,7 @@ def _print_job_detail(job: dict):
         for i, r in enumerate(job["ai_results"]):
             ts_str = time.strftime("%H:%M:%S", time.localtime(r.get("created_at", 0)))
             click.echo(f"  [{i}] mode={r['mode']}  @ {ts_str}")
-            click.echo(f"  {r['text'][:200]}{'…' if len(r['text']) > 200 else ''}\n")
+            click.echo(f"  {r['text']}\n")
 
     click.echo("─" * 60)
 

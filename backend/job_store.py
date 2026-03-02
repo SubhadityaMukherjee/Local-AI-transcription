@@ -73,6 +73,7 @@ class SQLJobStore:
 
     def __init__(self, config):
         self.config = config
+        logger.debug("Initializing SQLJobStore")
 
         url = getattr(config, "DATABASE_URL", None)
         if not url:
@@ -86,6 +87,7 @@ class SQLJobStore:
         if url.startswith("sqlite"):
             # SQLite needs check_same_thread=False for multi-threaded Flask/CLI use
             connect_args["check_same_thread"] = False
+            logger.debug("SQLite mode: disabling same-thread check for multi-threading")
 
         self._engine = create_engine(
             url,
@@ -95,13 +97,16 @@ class SQLJobStore:
             echo=False,  # set True to log all SQL (very verbose)
         )
         self._Session = sessionmaker(bind=self._engine, expire_on_commit=False)
+        logger.debug("SQLAlchemy engine created")
         self._ensure_schema()
+        logger.info("SQLJobStore ready")
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
     def _ensure_schema(self):
+        logger.debug("Ensuring database schema...")
         Base.metadata.create_all(self._engine)
         logger.debug("Schema verified / created")
 
@@ -175,20 +180,28 @@ class SQLJobStore:
         """Returns Path to actual recording file for a job."""
         job = self.get(job_id)
         if not job or not job["filename"]:
+            logger.warning("Cannot get recording path: job %s not found or has no filename", 
+                          job_id[:8])
             return None
-        return Path(job["filename"])
+        path = Path(job["filename"])
+        logger.debug("Recording path for job %s: %s", job_id[:8], path)
+        return path
 
     def get(self, job_id: str) -> Optional[dict]:
+        logger.debug("Retrieving job: %s", job_id[:8])
         with self._session() as s:
             job = s.get(JobModel, job_id)
         if job is None:
             logger.debug("Job %s not found", job_id[:8])
             return None
+        logger.debug("Job %s retrieved (status=%s, progress=%d%%)", 
+                    job_id[:8], job.status, job.progress)
         return job.to_dict()
 
     def update(self, job_id: str, **kwargs):
         if not kwargs:
             return
+        logger.debug("Updating job %s with: %s", job_id[:8], list(kwargs.keys()))
         with self._session() as s:
             job = s.get(JobModel, job_id)
             if job is None:
@@ -196,6 +209,7 @@ class SQLJobStore:
                 return
             for k, v in kwargs.items():
                 setattr(job, k, v)
+                logger.debug("  %s: %s", k, v if k != "transcript" else f"<{len(v)} chars>" if isinstance(v, str) else v)
             s.commit()
         logger.debug("Updated job %s: %s", job_id[:8], list(kwargs.keys()))
 
@@ -210,6 +224,7 @@ class SQLJobStore:
         return True
 
     def list_all(self, limit: int = 50) -> list:
+        logger.debug("Listing all jobs (limit=%d)", limit)
         with self._session() as s:
             jobs = (
                 s.query(JobModel)
@@ -217,7 +232,9 @@ class SQLJobStore:
                 .limit(limit)
                 .all()
             )
-            return [j.to_dict() for j in jobs]
+            result = [j.to_dict() for j in jobs]
+        logger.info("Retrieved %d jobs (from %d total)", len(result), len(result))
+        return result
 
     def clear_completed(self) -> int:
         with self._session() as s:
@@ -243,17 +260,22 @@ class SQLJobStore:
         logger.info("Added AI result (mode=%s) to job %s", mode, job_id[:8])
 
     def delete_ai_result(self, job_id: str, idx: int) -> bool:
+        logger.debug("Deleting AI result #%d from job %s", idx, job_id[:8])
         with self._session() as s:
             job = s.get(JobModel, job_id)
             if job is None:
+                logger.warning("delete_ai_result: job %s not found", job_id[:8])
                 return False
             results = list(job.ai_results or [])
             if idx < 0 or idx >= len(results):
+                logger.warning("delete_ai_result: invalid index %d (job has %d results)", 
+                              idx, len(results))
                 return False
+            deleted_mode = results[idx].get("mode", "unknown")
             results.pop(idx)
             job.ai_results = results
             s.commit()
-        logger.info("Deleted AI result #%d from job %s", idx, job_id[:8])
+        logger.info("Deleted AI result #%d (mode=%s) from job %s", idx, deleted_mode, job_id[:8])
         return True
 
 
