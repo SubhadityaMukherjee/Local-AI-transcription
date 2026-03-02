@@ -7,11 +7,30 @@ import threading
 import time
 import uuid
 from pathlib import Path
-
+import functools
+import time
+import logging
 import click
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+# ── Timing decorator ──────────────────────────────────────────────────────────
+def timed(func):
+    """Decorator to log the execution time of a function."""
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        start = time.perf_counter()
+        try:
+            return func(*args, **kwargs)
+        finally:
+            end = time.perf_counter()
+            logger = logging.getLogger("whisper_cli.ai_service")
+            logger.info("⏱ %s executed in %.3f seconds", func.__name__, end - start)
+
+    return wrapper
 
 
 # ── Logging setup ──────────────────────────────────────────────────────────────
@@ -224,12 +243,13 @@ def cli(ctx, verbose, db):
 
 @cli.command()
 @click.argument("file", type=click.Path(exists=True))
-@click.argument("mode", default=None, required=False, metavar="[MODE]")
+@click.argument("mode", default="default", required=False, metavar="[MODE]")
 @click.option(
     "--names", default="", help="Comma-separated names to help spelling correction"
 )
 @click.option("--out", default=None, help="Write transcript to this file")
 @click.pass_context
+@timed
 def transcribe(ctx, file, mode, names, out):
     """📁 Transcribe an audio/video file using Whisper.
 
@@ -281,7 +301,7 @@ def transcribe(ctx, file, mode, names, out):
 
 
 @cli.command()
-@click.argument("mode", default=None, required=False, metavar="[MODE]")
+@click.argument("mode", default="default", required=False, metavar="[MODE]")
 @click.option(
     "--duration",
     "-d",
@@ -530,6 +550,7 @@ def names_add(ctx, names_str):
     "--names", default="", help="Comma-separated names for spelling correction"
 )
 @click.pass_context
+@timed
 def ai_cmd(ctx, job_id, mode, names):
     """🤖 Rerun AI processing on an existing transcription.
 

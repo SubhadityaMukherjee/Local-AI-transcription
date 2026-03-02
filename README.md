@@ -20,6 +20,7 @@ The project includes a CLI for scripting and batch operations. Use `python cli.p
 #### Basic Commands
 
 **Record audio from your microphone:**
+
 ```bash
 python cli.py record
 python cli.py record grammar              # Record and run AI grammar check
@@ -28,6 +29,7 @@ python cli.py record --out /path/to/file.wav
 ```
 
 **Transcribe an existing audio/video file:**
+
 ```bash
 python cli.py transcribe /path/to/file.mp3
 python cli.py transcribe /path/to/file.mp3 grammar      # Transcribe and run AI mode
@@ -36,6 +38,7 @@ python cli.py transcribe /path/to/file.mp3 --names "john,mary"
 ```
 
 **Manage transcription jobs:**
+
 ```bash
 python cli.py jobs                        # List all jobs
 python cli.py jobs --limit 50             # List last 50 jobs
@@ -45,6 +48,7 @@ python cli.py jobs --clear                # Delete all completed/errored jobs
 ```
 
 **View and run AI modes:**
+
 ```bash
 python cli.py modes                       # List all available AI modes
 python cli.py ai <job-uuid> grammar       # Run AI grammar check on existing job
@@ -53,6 +57,7 @@ python cli.py ai <job-uuid> grammar --names "john,mary"
 ```
 
 **Personal names:**
+
 ```bash
 python cli.py names list                  # Show configured personal names
 python cli.py names add "Alice,Bob"     # Add new personal names (comma-separated)
@@ -66,11 +71,13 @@ python cli.py names add "Alice,Bob"     # Add new personal names (comma-separate
 #### Examples
 
 **Record and auto-fix transcript in one command:**
+
 ```bash
 python cli.py record grammar
 ```
 
 **Transcribe batch of files:**
+
 ```bash
 for file in recordings/*.mp3; do
   echo "Processing $file..."
@@ -79,6 +86,7 @@ done
 ```
 
 **Transcribe in verbose mode (see detailed logs):**
+
 ```bash
 python cli.py -v transcribe /path/to/file.mp3
 ```
@@ -100,6 +108,7 @@ The `prompts.toml` file controls the set of **AI modes**. Each mode corresponds 
 ### Example Modes
 
 **Summarize Prompt:**
+
 ```toml
 [prompts.summarize]
 instruction = "Your instructions here."
@@ -111,6 +120,7 @@ input_placeholder = "Transcript: {text}"
 ```
 
 **Grammar/Auto-fix Prompt:**
+
 ```toml
 [prompts.grammar]
 instruction = "Your instructions here."

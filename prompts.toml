@@ -1,4 +1,4 @@
-[prompts.journal]
+[prompts.default]
 instruction = """
 You are an expert transcript and journal editor.
 
@@ -16,7 +16,7 @@ Editing Rules to Apply:
 - Numbered list conversion (conditional): ONLY if the text contains the exact instruction "make this a numbered list": Convert into a numbered markdown list using "1.". Do not change wording of items.
 - Heading conversion (conditional): ONLY if the text contains the exact instructions "heading one", "heading two", or "heading three": Convert the immediately following sentence into a markdown heading of the specified level (#, ##, ###). Add appropriate newlines.
 - Add line breaks where needed
-- Stop adding semi colons for no reason
+- New sentence is preferred over semi colon.
 - Name spelling: Correct the spelling of personal names using the following reference list when appropriate: {names}
 
 Critical Constraints:
