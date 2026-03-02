@@ -1,153 +1,243 @@
-"""Job management with in-memory storage and disk persistence."""
+"""SQLAlchemy-backed job store (drop-in replacement for the JSON-based JobStore).
+
+Supports any SQLAlchemy-compatible database:
+  - MySQL:      mysql+pymysql://user:pass@host/dbname
+  - PostgreSQL: postgresql+psycopg2://user:pass@host/dbname
+  - SQLite:     sqlite:///path/to/whisper.db
+  - and more
+
+Set the DATABASE_URL environment variable (or config.DATABASE_URL).
+"""
 
 import json
-import threading
+import logging
 import time
 import uuid
 from typing import Optional
 
+from sqlalchemy import (
+    Column,
+    String,
+    Integer,
+    Float,
+    Text,
+    JSON,
+    create_engine,
+    text,
+)
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-class JobStore:
-    """Thread-safe job storage with persistence."""
+logger = logging.getLogger("whisper_cli.job_store")
+
+
+# ── ORM model ──────────────────────────────────────────────────────────────────
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class JobModel(Base):
+    __tablename__ = "jobs"
+
+    id = Column(String(36), primary_key=True)
+    filename = Column(Text, nullable=False)
+    status = Column(String(32), nullable=False, default="queued")
+    progress = Column(Integer, nullable=False, default=0)
+    transcript = Column(Text, nullable=True)
+    error = Column(Text, nullable=True)
+    created_at = Column(Float, nullable=False)
+    ai_results = Column(JSON, nullable=True, default=list)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "filename": self.filename,
+            "status": self.status,
+            "progress": self.progress,
+            "transcript": self.transcript,
+            "error": self.error,
+            "created_at": self.created_at,
+            "ai_results": self.ai_results or [],
+        }
+
+
+# ── Store ──────────────────────────────────────────────────────────────────────
+
+
+class SQLJobStore:
+    """Job store backed by SQLAlchemy (MySQL, PostgreSQL, SQLite, …)."""
 
     def __init__(self, config):
         self.config = config
-        self.jobs: dict = {}
-        self._lock = threading.Lock()
+
+        url = getattr(config, "DATABASE_URL", None)
+        if not url:
+            import os
+
+            url = os.environ.get("DATABASE_URL", "sqlite:///whisper.db")
+
+        logger.info("Connecting to database: %s", _redact(url))
+
+        connect_args = {}
+        if url.startswith("sqlite"):
+            # SQLite needs check_same_thread=False for multi-threaded Flask/CLI use
+            connect_args["check_same_thread"] = False
+
+        self._engine = create_engine(
+            url,
+            pool_pre_ping=True,  # detect stale connections
+            pool_recycle=1800,  # recycle connections every 30 min
+            connect_args=connect_args,
+            echo=False,  # set True to log all SQL (very verbose)
+        )
+        self._Session = sessionmaker(bind=self._engine, expire_on_commit=False)
+        self._ensure_schema()
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _ensure_schema(self):
+        Base.metadata.create_all(self._engine)
+        logger.debug("Schema verified / created")
+
+    def _session(self) -> Session:
+        return self._Session()
+
+    # ------------------------------------------------------------------
+    # Public API — mirrors JobStore exactly
+    # ------------------------------------------------------------------
 
     def load_from_disk(self):
-        """Load persisted jobs from disk on startup."""
-        jobs_file = self.config.JOBS_FILE
-        if not jobs_file.exists():
-            return
-
-        try:
-            data = json.loads(jobs_file.read_text())
-            cutoff = (
-                time.time() - self.config.JOB_TTL_DAYS * 86400
-                if self.config.JOB_TTL_DAYS > 0
-                else 0
-            )
-            kept = 0
-
-            for jid, j in data.items():
-                if cutoff and j.get("created_at", 0) < cutoff:
-                    continue
-                # Ensure job has required fields even if loaded from disk
-                if "status" not in j:
-                    j["status"] = "done"  # Default to done for loaded jobs
-                self.jobs[jid] = j
-                kept += 1
-
-            print(f"  Loaded {kept} jobs from store (TTL={self.config.JOB_TTL_DAYS}d)")
-        except Exception as e:
-            print(f"  Warning: could not load jobs store: {e}")
+        """No-op: the DB is always-on. Prunes expired jobs on startup."""
+        ttl = getattr(self.config, "JOB_TTL_DAYS", 30)
+        if ttl > 0:
+            cutoff = time.time() - ttl * 86400
+            with self._session() as s:
+                deleted = (
+                    s.query(JobModel)
+                    .filter(JobModel.created_at < cutoff)
+                    .delete(synchronize_session=False)
+                )
+                s.commit()
+            if deleted:
+                logger.info("Pruned %d expired jobs (TTL=%dd)", deleted, ttl)
+        logger.info("SQLAlchemy store ready")
 
     def save_to_disk(self):
-        """Persist completed/errored jobs to disk."""
-        with self._lock:
-            saveable = {
-                jid: {k: v for k, v in j.items() if k != "debug_log"}
-                for jid, j in self.jobs.items()
-                if j["status"] in ("done", "error")
-            }
-        # File I/O happens outside the lock so other threads aren't blocked
-        try:
-            tmp = self.config.JOBS_FILE.with_suffix(".tmp")
-            tmp.write_text(json.dumps(saveable, indent=2))
-            tmp.replace(self.config.JOBS_FILE)
-        except Exception as e:
-            print(f"  Warning: could not persist jobs: {e}")
+        """No-op: SQLAlchemy commits immediately after every mutation."""
+        pass
 
     def create(self, filename: str) -> dict:
-        """Create a new job."""
-        job = {
-            "id": str(uuid.uuid4()),
-            "filename": filename,
-            "status": "queued",
-            "progress": 0,
-            "transcript": None,
-            "error": None,
-            "created_at": time.time(),
-        }
-        with self._lock:
-            self.jobs[job["id"]] = job
-        return job
+        job = JobModel(
+            id=str(uuid.uuid4()),
+            filename=filename,
+            status="queued",
+            progress=0,
+            transcript=None,
+            error=None,
+            created_at=time.time(),
+            ai_results=[],
+        )
+        with self._session() as s:
+            s.add(job)
+            s.commit()
+            result = job.to_dict()
+        logger.info("Created job %s for file '%s'", result["id"][:8], filename)
+        return result
 
     def get(self, job_id: str) -> Optional[dict]:
-        """Get job by ID."""
-        return self.jobs.get(job_id)
+        with self._session() as s:
+            job = s.get(JobModel, job_id)
+        if job is None:
+            logger.debug("Job %s not found", job_id[:8])
+            return None
+        return job.to_dict()
 
     def update(self, job_id: str, **kwargs):
-        """Update job fields."""
-        should_persist = False
-        with self._lock:
-            j = self.jobs.get(job_id)
-            if j:
-                j.update(kwargs)
-                if kwargs.get("status") in ("done", "error"):
-                    should_persist = True
-
-        if should_persist:
-            self.save_to_disk()
+        if not kwargs:
+            return
+        with self._session() as s:
+            job = s.get(JobModel, job_id)
+            if job is None:
+                logger.warning("update: job %s not found", job_id[:8])
+                return
+            for k, v in kwargs.items():
+                setattr(job, k, v)
+            s.commit()
+        logger.debug("Updated job %s: %s", job_id[:8], list(kwargs.keys()))
 
     def delete(self, job_id: str) -> bool:
-        """Delete a job."""
-        with self._lock:
-            if job_id not in self.jobs:
+        with self._session() as s:
+            job = s.get(JobModel, job_id)
+            if job is None:
                 return False
-            del self.jobs[job_id]
-        self.save_to_disk()
+            s.delete(job)
+            s.commit()
+        logger.info("Deleted job %s", job_id[:8])
         return True
 
     def list_all(self, limit: int = 50) -> list:
-        """List jobs sorted by creation date (most recent first)."""
-        with self._lock:
-            sorted_jobs = sorted(
-                self.jobs.values(),
-                key=lambda j: j["created_at"],
-                reverse=True,
+        with self._session() as s:
+            jobs = (
+                s.query(JobModel)
+                .order_by(JobModel.created_at.desc())
+                .limit(limit)
+                .all()
             )
-            # Return shallow copies so callers can't accidentally mutate in-memory state
-            return [dict(j) for j in sorted_jobs[:limit]]
+            return [j.to_dict() for j in jobs]
 
     def clear_completed(self) -> int:
-        """Delete all completed/errored jobs."""
-        with self._lock:
-            to_remove = [
-                jid for jid, j in self.jobs.items() if j["status"] in ("done", "error")
-            ]
-            for jid in to_remove:
-                del self.jobs[jid]
-        self.save_to_disk()
-        return len(to_remove)
+        with self._session() as s:
+            count = (
+                s.query(JobModel)
+                .filter(JobModel.status.in_(["done", "error"]))
+                .delete(synchronize_session=False)
+            )
+            s.commit()
+        logger.info("Cleared %d completed/errored jobs", count)
+        return count
 
     def add_ai_result(self, job_id: str, mode: str, text: str):
-        """Add AI result to job."""
-        with self._lock:
-            j = self.jobs.get(job_id)
-            if j:
-                if "ai_results" not in j:
-                    j["ai_results"] = []
-                j["ai_results"].append(
-                    {
-                        "mode": mode,
-                        "text": text,
-                        "created_at": time.time(),
-                    }
-                )
-        self.save_to_disk()
+        with self._session() as s:
+            job = s.get(JobModel, job_id)
+            if job is None:
+                logger.warning("add_ai_result: job %s not found", job_id[:8])
+                return
+            results = list(job.ai_results or [])
+            results.append({"mode": mode, "text": text, "created_at": time.time()})
+            job.ai_results = results
+            s.commit()
+        logger.info("Added AI result (mode=%s) to job %s", mode, job_id[:8])
 
     def delete_ai_result(self, job_id: str, idx: int) -> bool:
-        """Delete AI result at index."""
-        with self._lock:
-            j = self.jobs.get(job_id)
-            if not j:
+        with self._session() as s:
+            job = s.get(JobModel, job_id)
+            if job is None:
                 return False
-            ai_results = j.get("ai_results", [])
-            if idx < 0 or idx >= len(ai_results):
+            results = list(job.ai_results or [])
+            if idx < 0 or idx >= len(results):
                 return False
-            ai_results.pop(idx)
-            j["ai_results"] = ai_results
-        self.save_to_disk()
+            results.pop(idx)
+            job.ai_results = results
+            s.commit()
+        logger.info("Deleted AI result #%d from job %s", idx, job_id[:8])
         return True
+
+
+# ── Utility ────────────────────────────────────────────────────────────────────
+
+
+def _redact(url: str) -> str:
+    """Hide password in a DB URL for safe logging."""
+    try:
+        from urllib.parse import urlparse, urlunparse
+
+        p = urlparse(url)
+        if p.password:
+            netloc = p.netloc.replace(p.password, "***")
+            return urlunparse(p._replace(netloc=netloc))
+    except Exception:
+        pass
+    return url

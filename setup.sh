@@ -16,7 +16,8 @@ err() {
 }
 section() { echo -e "\n${BOLD}── $* ──${RESET}"; }
 
-OLLAMA_MODEL="gpt-oss:20b"
+OLLAMA_MODEL="deepseek-r1"
+WHISPER_MODEL_NAME="large-v3-turbo"
 
 # ── 0. Prereq checks ──────────────────────────────────────────────────────────
 section "Checking prerequisites"
