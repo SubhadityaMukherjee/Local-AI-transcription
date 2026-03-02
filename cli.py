@@ -34,10 +34,10 @@ logger = logging.getLogger("whisper_cli")
 
 def _load_services(use_db: bool = False):
     """Import and wire up all services."""
-    from backend.config import Config
     from backend.ai_service import AIService
-    from backend.transcription_service import TranscriptionService
+    from backend.config import Config
     from backend.job_store import SQLJobStore
+    from backend.transcription_service import TranscriptionService
 
     cfg = Config()
 
@@ -116,7 +116,8 @@ def record_audio(output_path: Path, duration: int | None = None) -> Path:
         )
 
     # ── System fallback ────────────────────────────────────────────────────────
-    import platform, subprocess
+    import platform
+    import subprocess
 
     system = platform.system()
     if system == "Linux":
@@ -209,7 +210,7 @@ def _progress_callback(store, job_id: str):
 def cli(ctx, verbose, db):
     """
     🎙  Whisper Studio CLI — Transcribe & process audio with AI
-    
+
     Record audio, transcribe with Whisper, and enhance with AI.
     """
     setup_logging(verbose)
@@ -231,9 +232,9 @@ def cli(ctx, verbose, db):
 @click.pass_context
 def transcribe(ctx, file, mode, names, out):
     """📁 Transcribe an audio/video file using Whisper.
-    
+
     FILE: Path to audio or video file (mp3, wav, flac, m4a, mp4, mkv, mov)
-    
+
     [MODE]: Optional AI mode to run after transcription (e.g., 'grammar', 'summarize')
     """
     ai_mode = mode
@@ -301,7 +302,7 @@ def transcribe(ctx, file, mode, names, out):
 @click.pass_context
 def record(ctx, mode, duration, out, names, skip_transcribe):
     """🎤 Record audio from your microphone and optionally transcribe.
-    
+
     [MODE]: Optional AI mode to run after transcription (e.g., 'grammar', 'summarize')
     """
     ai_mode = mode
@@ -476,11 +477,11 @@ def modes(ctx):
 @click.pass_context
 def ai_cmd(ctx, job_id, mode, names):
     """🤖 Rerun AI processing on an existing transcription.
-    
+
     JOB_ID: ID of the transcription job (see 'jobs' command to list)
-    
+
     MODE: AI processing mode (e.g., 'grammar', 'summarize')
-    
+
     Use this command to re-process a transcript or try a different AI mode.
     """
     logger.info("=== ai command (job=%s mode=%s) ===", job_id[:8], mode)

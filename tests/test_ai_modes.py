@@ -1,10 +1,11 @@
 import json
 import os
 import tempfile
-import pytest
 from pathlib import Path
 
+import pytest
 from app import app
+
 from backend import ai_service as ai_mod
 
 PROMPTS_PATH = Path(__file__).parent.parent / "prompts.toml"
@@ -88,6 +89,7 @@ def test_add_new_mode(client=None):
     )
     assert resp3.status_code == 400
     assert "already exists" in resp3.get_json().get("error", "")
+
 
 def test_rerun_uses_stored_transcript(client=None, monkeypatch=None):
     """Calling the AI endpoint with a job_id but no text should reuse

@@ -23,12 +23,18 @@ class TranscriptionService:
             [
                 "ffmpeg",
                 "-y",
-                "-i", str(src),
-                "-af", "silenceremove=1:0:-50dB", # Skip silence at start and internal pauses
-                "-ar", "16000",
-                "-ac", "1",
-                "-sample_fmt", "s16",
-                "-f", "wav",
+                "-i",
+                str(src),
+                "-af",
+                "silenceremove=1:0:-50dB",  # Skip silence at start and internal pauses
+                "-ar",
+                "16000",
+                "-ac",
+                "1",
+                "-sample_fmt",
+                "s16",
+                "-f",
+                "wav",
                 str(dst),
             ],
             capture_output=True,
@@ -56,12 +62,16 @@ class TranscriptionService:
 
         cmd = [
             self.config.WHISPER_BIN,
-            "--model", self.config.WHISPER_MODEL,
-            "--file", str(wav),
+            "--model",
+            self.config.WHISPER_MODEL,
+            "--file",
+            str(wav),
             "--output-txt",
-            "--output-file", out_stem,
+            "--output-file",
+            out_stem,
             "--print-progress",
-            "--threads", threads,
+            "--threads",
+            threads,
         ]
 
         # Capture STDOUT/STDERR combined to catch both progress and text segments
@@ -84,7 +94,7 @@ class TranscriptionService:
                 proc.wait()
                 raise JobCancelledError("cancelled")
 
-            print(f"[whisper] {line}") # Keep server logs active
+            print(f"[whisper] {line}")  # Keep server logs active
 
             # 1. Parse Progress (flicker-free)
             if "progress =" in line:
@@ -95,11 +105,13 @@ class TranscriptionService:
                     if pct > last_pct:
                         last_pct = pct
                         if progress_callback:
-                            progress_callback({
-                                "stage": "transcribing",
-                                "pct": 30 + int(pct * 0.65),
-                                "message": f"Transcribing... {pct}%"
-                            })
+                            progress_callback(
+                                {
+                                    "stage": "transcribing",
+                                    "pct": 30 + int(pct * 0.65),
+                                    "message": f"Transcribing... {pct}%",
+                                }
+                            )
                 except (ValueError, IndexError):
                     pass
 
@@ -108,11 +120,13 @@ class TranscriptionService:
                 try:
                     text_part = line.split("]")[-1].strip()
                     if text_part and progress_callback:
-                        progress_callback({
-                            "stage": "transcribing",
-                            "pct": 30 + int(max(0, last_pct) * 0.65),
-                            "text_segment": text_part
-                        })
+                        progress_callback(
+                            {
+                                "stage": "transcribing",
+                                "pct": 30 + int(max(0, last_pct) * 0.65),
+                                "text_segment": text_part,
+                            }
+                        )
                 except Exception:
                     pass
 

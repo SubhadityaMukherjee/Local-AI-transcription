@@ -1,16 +1,16 @@
 """AI service for summarization and text processing (streaming-first)."""
 
+import codecs
 import json
 import logging
 import tomllib as tomli
 import urllib.request as urlreq
 from pathlib import Path
 from typing import Generator
-import codecs
+
 import ollama
 
 logger = logging.getLogger("whisper_cli.ai_service")
-
 
 
 class AIService:
@@ -45,23 +45,17 @@ class AIService:
             self._prompt_configs[mode] = prompt_config.copy()
             self._prompts[mode] = self._build_prompt(prompt_config)
             logger.debug("Loaded mode: %s", mode)
-        
+
         logger.info("Loaded %d AI modes from prompts.toml", len(self._prompts))
 
     def _build_prompt(self, prompt_config: dict) -> str:
         instruction = prompt_config.get("instruction", "")
         placeholder = prompt_config.get("input_placeholder", "{text}")
-
         if "formatting_rules" in prompt_config:
             rules = "\n".join(f"- {r}" for r in prompt_config["formatting_rules"])
             return f"Task: {instruction}\n\nFormatting rules:\n{rules}\n\n{placeholder}"
 
-        if "rules" in prompt_config:
-            rules = "\n".join(
-                f"{i+1}. {r}" for i, r in enumerate(prompt_config["rules"])
-            )
-            return f"Task: {instruction}\n\nInstructions:\n{rules}\n\n{placeholder}"
-
+        # Do not depend on a legacy `rules` key — fall back to a simple template
         return f"Task: {instruction}\n\n{placeholder}"
 
     # ------------------------------------------------------------------
@@ -91,14 +85,8 @@ class AIService:
 
     def build_system_prompt(self, prompt_config: dict, names=None) -> str:
         instruction = prompt_config.get("instruction", "")
-        rules = prompt_config.get("rules", [])
-        names_str = ", ".join(names or [])
-
-        rules_text = "\n".join(
-            f"{i+1}. {r.format(names=names_str)}" for i, r in enumerate(rules)
-        )
-
-        return f"{instruction}\n\nRules:\n{rules_text}" if rules else instruction
+        # Legacy `rules` support removed — return the instruction only.
+        return instruction
 
     def _build_messages(self, text: str, mode: str, names) -> list[dict]:
         if mode not in self._prompt_configs:
@@ -120,8 +108,9 @@ class AIService:
 
     def process(self, text: str, mode: str = "summarize", names=None) -> str:
         """Non-streaming API built on top of streaming."""
-        logger.debug("Processing (non-streaming) with mode=%s, text_len=%d", 
-                     mode, len(text))
+        logger.debug(
+            "Processing (non-streaming) with mode=%s, text_len=%d", mode, len(text)
+        )
         return "".join(self.process_stream(text, mode, names))
 
     def process_stream(
@@ -133,8 +122,12 @@ class AIService:
             raise ValueError("AI endpoint not configured")
 
         names = names if names is not None else self.config.get_personal_names()
-        logger.debug("Processing text with mode=%s (text_len=%d, names=%s)", 
-                     mode, len(text), names)
+        logger.debug(
+            "Processing text with mode=%s (text_len=%d, names=%s)",
+            mode,
+            len(text),
+            names,
+        )
         messages = self._build_messages(text, mode, names)
 
         # Convert to Ollama message format (same structure)
@@ -241,7 +234,6 @@ class AIService:
             "instruction",
             "input_placeholder",
             "formatting_rules",
-            "rules",
         ):
             if key in prompt_config:
                 lines.append(f"{key} = {json.dumps(prompt_config[key])}")
@@ -256,6 +248,5 @@ class AIService:
         return (
             "Add to your .env file:\n"
             "  AI_BASE_URL=http://localhost:11434/v1   # Ollama\n"
-            "  AI_BASE_URL=http://localhost:1234/v1    # LM Studio\n"
             "Then restart the server."
         )

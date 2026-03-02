@@ -11,23 +11,15 @@ Set the DATABASE_URL environment variable (or config.DATABASE_URL).
 
 import json
 import logging
+import shutil
 import time
 import uuid
-import shutil
+from pathlib import Path
 from typing import Optional
 
-from sqlalchemy import (
-    Column,
-    String,
-    Integer,
-    Float,
-    Text,
-    JSON,
-    create_engine,
-    text,
-)
+from sqlalchemy import (JSON, Column, Float, Integer, String, Text,
+                        create_engine, text)
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
-from pathlib import Path
 
 logger = logging.getLogger("whisper_cli.job_store")
 RECORDINGS_DIR = Path(__file__).parent / "recordings"
@@ -180,8 +172,10 @@ class SQLJobStore:
         """Returns Path to actual recording file for a job."""
         job = self.get(job_id)
         if not job or not job["filename"]:
-            logger.warning("Cannot get recording path: job %s not found or has no filename", 
-                          job_id[:8])
+            logger.warning(
+                "Cannot get recording path: job %s not found or has no filename",
+                job_id[:8],
+            )
             return None
         path = Path(job["filename"])
         logger.debug("Recording path for job %s: %s", job_id[:8], path)
@@ -194,8 +188,12 @@ class SQLJobStore:
         if job is None:
             logger.debug("Job %s not found", job_id[:8])
             return None
-        logger.debug("Job %s retrieved (status=%s, progress=%d%%)", 
-                    job_id[:8], job.status, job.progress)
+        logger.debug(
+            "Job %s retrieved (status=%s, progress=%d%%)",
+            job_id[:8],
+            job.status,
+            job.progress,
+        )
         return job.to_dict()
 
     def update(self, job_id: str, **kwargs):
@@ -209,7 +207,15 @@ class SQLJobStore:
                 return
             for k, v in kwargs.items():
                 setattr(job, k, v)
-                logger.debug("  %s: %s", k, v if k != "transcript" else f"<{len(v)} chars>" if isinstance(v, str) else v)
+                logger.debug(
+                    "  %s: %s",
+                    k,
+                    (
+                        v
+                        if k != "transcript"
+                        else f"<{len(v)} chars>" if isinstance(v, str) else v
+                    ),
+                )
             s.commit()
         logger.debug("Updated job %s: %s", job_id[:8], list(kwargs.keys()))
 
@@ -268,14 +274,19 @@ class SQLJobStore:
                 return False
             results = list(job.ai_results or [])
             if idx < 0 or idx >= len(results):
-                logger.warning("delete_ai_result: invalid index %d (job has %d results)", 
-                              idx, len(results))
+                logger.warning(
+                    "delete_ai_result: invalid index %d (job has %d results)",
+                    idx,
+                    len(results),
+                )
                 return False
             deleted_mode = results[idx].get("mode", "unknown")
             results.pop(idx)
             job.ai_results = results
             s.commit()
-        logger.info("Deleted AI result #%d (mode=%s) from job %s", idx, deleted_mode, job_id[:8])
+        logger.info(
+            "Deleted AI result #%d (mode=%s) from job %s", idx, deleted_mode, job_id[:8]
+        )
         return True
 
 

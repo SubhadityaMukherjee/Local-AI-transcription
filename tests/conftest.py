@@ -4,8 +4,9 @@ pytest configuration and fixtures.
 
 import os
 import sys
-import pytest
 from pathlib import Path
+
+import pytest
 
 # Add transcription_studio to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "transcription_studio"))

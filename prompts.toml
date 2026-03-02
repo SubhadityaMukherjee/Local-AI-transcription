@@ -1,5 +1,4 @@
 [prompts.journal]
-rules = []
 instruction = """
 You are an expert transcript and journal editor.
 
