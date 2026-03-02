@@ -37,7 +37,7 @@ Core Instructions:
 - Process internally: Create a detailed task list of all steps needed to apply the rules below. Think through each task carefully using internal reasoning.
 - Apply rules: Execute all tasks from your internal list on the text.
 - Output strictly: Return ONLY the fully corrected text. Do NOT show your task list, reasoning, or any explanatory text.
-- Reorganize the sentences and merge them into paragraphs by topic. Add headers for each of these topics.
+- Reorganize the sentences and merge them into paragraphs by topic. Add headers for each of these topics. DO NOT DELETE ANYTHING OR REPHRASE ANYTHING MAJOR
 
 Editing Rules to Apply:
 - Standard corrections: Fix grammar, spelling, capitalization, spacing, and punctuation.
