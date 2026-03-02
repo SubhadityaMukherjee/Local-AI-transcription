@@ -465,6 +465,61 @@ def modes(ctx):
         click.echo()
 
 
+# ── personal names subcommands ───────────────────────────────────────────────
+
+
+@cli.group()
+@click.pass_context
+def names(ctx):
+    """Manage personal names used by the AI for spelling/formatting."""
+    pass
+
+
+@names.command("list")
+@click.pass_context
+def names_list(ctx):
+    """List personal names currently configured."""
+    cfg = __import__("backend.config", fromlist=["Config"]).Config()
+    names = cfg.get_personal_names()
+    if not names:
+        click.echo("No personal names configured.")
+        return
+    click.echo("Personal names:")
+    for n in names:
+        click.echo(f" - {n}")
+
+
+@names.command("add")
+@click.argument("names_str")
+@click.pass_context
+def names_add(ctx, names_str):
+    """Add one or more personal names (comma-separated).
+
+    Example: python cli.py names add "Alice,Bob"
+    """
+    cfg = __import__("backend.config", fromlist=["Config"]).Config()
+    existing = cfg.get_personal_names() or []
+    new = [n.strip() for n in names_str.split(",") if n.strip()]
+    combined = existing[:]
+    added = []
+    for n in new:
+        if n not in combined:
+            combined.append(n)
+            added.append(n)
+
+    if not added:
+        click.echo("No new names to add.")
+        return
+
+    ok = cfg.save_personal_names(combined)
+    if ok:
+        logger.info("Added personal names: %s", ",".join(added))
+        click.echo(f"Added: {', '.join(added)}")
+    else:
+        logger.error("Failed to save personal names")
+        click.echo("Error: could not save personal names.", err=True)
+
+
 # ── ai sub-command (process an existing job) ───────────────────────────────────
 
 

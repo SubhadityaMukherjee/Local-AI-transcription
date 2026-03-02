@@ -85,8 +85,19 @@ class AIService:
 
     def build_system_prompt(self, prompt_config: dict, names=None) -> str:
         instruction = prompt_config.get("instruction", "")
-        # Legacy `rules` support removed — return the instruction only.
-        return instruction
+        # Inject personal names into the system prompt so the model can use them
+        # for spelling/formatting guidance. Allow `{names}` formatting in the
+        # stored instruction, falling back gracefully if formatting fails.
+        names_str = ", ".join(names or [])
+        try:
+            instr = instruction.format(names=names_str)
+        except Exception:
+            instr = instruction
+
+        if names_str:
+            return f"{instr}\n\nPersonal names: {names_str}"
+
+        return instr
 
     def _build_messages(self, text: str, mode: str, names) -> list[dict]:
         if mode not in self._prompt_configs:
@@ -137,6 +148,7 @@ class AIService:
                 model=self.config.AI_MODEL,
                 messages=messages,
                 stream=True,
+                keep_alive="24h",
             )
 
             for chunk in response:

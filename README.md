@@ -52,6 +52,12 @@ python cli.py ai <job-uuid> summarize     # Run AI summarization on existing job
 python cli.py ai <job-uuid> grammar --names "john,mary"
 ```
 
+**Personal names:**
+```bash
+python cli.py names list                  # Show configured personal names
+python cli.py names add "Alice,Bob"     # Add new personal names (comma-separated)
+```
+
 #### Options
 
 - `--verbose` or `-v`: Enable debug logging (shows SQL queries, detailed progress)
