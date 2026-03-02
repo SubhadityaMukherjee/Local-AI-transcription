@@ -1,30 +1,44 @@
-# Personal names for spelling correction
-# One name per line
+# Personal names/terms
 Hrishita
 Subhaditya
 Mukherjee
 Mayukha
-Pieter
-Joaquin
-TU/e
-ALFIE
-Geert
+Diya
+Dida
 Ma
 Baba
 Pompi
-OpenML
-Eindhoven
-AutoML
 Soorya
-Auto Grader
-AutoDW
-Agentic Core
-ETDHub
 Gabrielle
-Shawon
-Thilina
 COVID
 Karolinska University
 Airi Pan
+Attamma
+Mamaiya
+Neslihan
+Pratiksha
+
+
+# TU/e
+Pieter
+Joaquin
+Eindhoven
+Auto Grader
 Taniya
 Mahmad
+Shawon
+Thilina
+OpenML
+Omosola
+Dalton
+
+# ALFIE
+AutoML
+AutoML+
+AMORE Lab
+Geert
+AutoDW
+Agentic Core
+ETD-Hub
+PyTorch
+Auto Gluon

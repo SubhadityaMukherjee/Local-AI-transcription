@@ -8,9 +8,8 @@ import time
 import uuid
 from pathlib import Path
 import functools
-import time
-import logging
 import click
+import shutil
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -184,11 +183,11 @@ def record_audio(output_path: Path, duration: int | None = None) -> Path:
 
 
 def _progress_callback(store, job_id: str):
-    """Return a progress callback that updates the store and prints to terminal."""
+    """Return a progress callback with a responsive, dynamic, and smooth progress bar."""
     last_pct = [-1]
 
     def cb(value):
-        # Value can be int (old-style) or dict (new-style from transcription_service)
+        # Determine progress percentage and message
         if isinstance(value, dict):
             pct = value.get("pct", last_pct[0])
             msg = value.get("message", "")
@@ -201,15 +200,31 @@ def _progress_callback(store, job_id: str):
 
         if pct != last_pct[0]:
             last_pct[0] = pct
-            bar_len = 30
-            filled = int(bar_len * pct / 100)
-            bar = "█" * filled + "░" * (bar_len - filled)
-            click.echo(f"\r  [{bar}] {pct:3d}%  {msg}   ", nl=False, err=True)
+
+            # Dynamic terminal width
+            terminal_width = shutil.get_terminal_size((80, 20)).columns
+
+            # Reserve space for brackets, percentage, message, and padding
+            reserved = 10 + len(msg)
+            bar_len = max(10, terminal_width - reserved)
+
+            # Smooth fill with Unicode block character
+            filled_len = int(bar_len * pct / 100)
+            bar = "█" * filled_len + "░" * (bar_len - filled_len)
+
+            # Print the progress bar
+            click.echo(
+                f"\r  [{bar}] {pct:3d}% {msg.ljust(terminal_width - bar_len - 10)}",
+                nl=False,
+                err=True,
+            )
             logger.debug("Progress %d%%: %s", pct, msg)
+
+            # Update store
             store.update(job_id, progress=pct)
 
         if pct >= 100:
-            click.echo("", err=True)  # newline after bar
+            click.echo("", err=True)  # newline after completion
 
     return cb
 

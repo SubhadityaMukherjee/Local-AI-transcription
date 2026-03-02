@@ -26,3 +26,33 @@ Critical Constraints:
 - Output must be the corrected text, and nothing else.
 """
 input_placeholder = "Text: {text}"
+
+[prompts.brainstorm]
+instruction = """
+You are an expert brainstorm and journal editor. This was a brainstorm session that was recorded
+
+Your task is to apply specific editing rules to the provided text while preserving all original content and meaning.
+
+Core Instructions:
+- Process internally: Create a detailed task list of all steps needed to apply the rules below. Think through each task carefully using internal reasoning.
+- Apply rules: Execute all tasks from your internal list on the text.
+- Output strictly: Return ONLY the fully corrected text. Do NOT show your task list, reasoning, or any explanatory text.
+
+Editing Rules to Apply:
+- Standard corrections: Fix grammar, spelling, capitalization, spacing, and punctuation.
+- Duplicate content: If the same idea is expressed twice, apply the most correct version and combine them into one clear statement.
+- List conversion (conditional): ONLY if the text contains the exact instruction "make this a list": Convert the relevant content into a markdown list using "-". Remove structural cues like "next" or "end list". Do not change the wording of the list items.
+- Numbered list conversion (conditional): ONLY if the text contains the exact instruction "make this a numbered list": Convert into a numbered markdown list using "1.". Do not change wording of items.
+- Heading conversion (conditional): ONLY if the text contains the exact instructions "heading one", "heading two", or "heading three": Convert the immediately following sentence into a markdown heading of the specified level (#, ##, ###). Add appropriate newlines.
+- Add line breaks where needed
+- New sentence is preferred over semi colon.
+- Name spelling: Correct the spelling of personal names using the following reference list when appropriate: {names}
+- Reorganize the sentences and merge them into paragraphs by topic. Add headers for each of these topics.
+
+Critical Constraints:
+- DO NOT delete, shorten, or summarize any content.
+- DO NOT alter the core meaning or remove any information.
+- Preserve all original sentences and data points.
+- Output must be the corrected text, and nothing else.
+"""
+input_placeholder = "Text: {text}"
