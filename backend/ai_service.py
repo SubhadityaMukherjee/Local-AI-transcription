@@ -1,285 +1,177 @@
-"""AI service for summarization and text processing."""
-
-import json
-import tomllib as tomli
-import urllib.error as urlerr
-import urllib.request as urlreq
+import tomllib
 from pathlib import Path
-from typing import Generator, Optional
+from typing import OrderedDict
+from ollama import chat
+import ollama
+import os
+import logging
+import sys
+
+logger = logging.getLogger("log")
+logging.basicConfig(level=logging.INFO)
 
 
-class AIService:
-    """Service for AI-powered text processing (summarization, grammar correction).
+class AIProcessing:
+    def __init__(self):
+        self.prompts_path = Path(__file__).parent.parent / "prompts.toml"
+        self.names_to_fix_file_path = (
+            Path(__file__).parent.parent / "personal_names.txt"
+        )
 
-    Prompts are defined in `prompts.toml` under a ``[prompts]`` table.  Each
-    section may include any of the following keys:
+        self._modes_with_prompts: OrderedDict = OrderedDict()
+        self.load_prompts()
 
-      * instruction (string) – main task description
-      * formatting_rules or rules (list) – extra guidance that will be
-        interpolated into the template
-      * input_placeholder (string) – template used to insert the text
-      * display_name (string, optional) – human‑friendly label for the mode
+        # Example: AI_MODEL=deepseek-r1:8b-thinking
+        self.ollama_model = os.getenv("AI_MODEL", "deepseek-r1:8b-thinking")
 
-    New modes can be added at runtime by appending a TOML section; the
-    service exposes helpers to enumerate and add modes.
-    """
+        # Enable / disable thinking via env variable (default: True)
+        self.enable_thinking = os.getenv("AI_THINK", "true").lower() == "true"
 
-    def __init__(self, config):
-        self.config = config
-        # ``_prompts`` stores the rendered prompt templates; ``_prompt_configs``
-        # preserves the raw configuration from the TOML file for UI/metadata.
-        self._prompts = {}
-        self._prompt_configs = {}
-        self._load_prompts()
+        logger.info(f"Using Ollama model: {self.ollama_model}")
+        logger.info(f"Thinking enabled: {self.enable_thinking}")
 
-    def _load_prompts(self) -> dict:
-        """Load AI prompts from TOML config file.
+        self.system_prompt = (
+            "You are an expert transcript and journal editor. "
+            "Your task is to apply specific editing rules to the provided text "
+            "while preserving all original content and meaning.\n\n"
+            "Core Instructions:\n"
+            "Process Internally: Create a detailed task list of all steps needed "
+            "to apply the rules below. Think through each task carefully using internal reasoning.\n"
+            "Apply Rules: Execute all tasks from your internal list on the text.\n"
+            "Output Strictly: Return ONLY the fully corrected text. "
+            "Do NOT show your task list, reasoning, or any explanatory text.\n\n"
+            "Editing Rules to Apply:\n"
+            "Standard Corrections: Fix grammar, spelling, capitalization, spacing, and punctuation.\n"
+            "Duplicate Content: If the same idea is expressed twice, apply the most correct version "
+            "and combine them into one clear statement.\n"
+            "List Conversion (Conditional): ONLY if the text contains the exact instruction "
+            "'make this a list': Convert the relevant content into a markdown list using '-'. "
+            "Remove structural cues like 'next' or 'end list'. Do not change the wording of the list items.\n"
+            "Heading Conversion (Conditional): ONLY if the text contains the exact instructions "
+            "'heading one', 'heading two', or 'heading three': Convert the immediately following "
+            "sentence into a markdown heading of the specified level (e.g., #, ##, ###). Add appropriate newlines.\n"
+            "Name Spelling: Correct the spelling of personal names using the following reference list "
+            "when appropriate.\n\n"
+            "Critical Constraints:\n"
+            "DO NOT delete, shorten, or summarize any content.\n"
+            "DO NOT alter the core meaning or remove any information.\n"
+            "Preserve all original sentences and data points.\n"
+            "Output must be the corrected text, and nothing else."
+        )
 
-        The method populates both ``self._prompt_configs`` (the raw data from the
-        file) and ``self._prompts`` (the rendered prompt template used when
-        actually invoking the model).  It returns the latter for backwards
-        compatibility with the original implementation.
-        """
-        self._prompts.clear()
-        self._prompt_configs.clear()
-        prompts_path = Path(__file__).parent.parent / "prompts.toml"
+    def load_names(self) -> str:
+        if not self.names_to_fix_file_path.exists():
+            return ""
+        with open(self.names_to_fix_file_path, "r", encoding="utf-8") as fp:
+            return "".join(fp.readlines())
 
-        if prompts_path.exists():
-            with open(prompts_path, "rb") as f:
-                config = tomli.load(f)
-
+    def load_prompts(self):
+        if self.prompts_path.exists():
+            with open(self.prompts_path, "rb") as f:
+                config = tomllib.load(f)
             for mode, prompt_config in config.get("prompts", {}).items():
-                self._prompt_configs[mode] = prompt_config.copy()
-                self._prompts[mode] = self._build_prompt(prompt_config)
+                self._modes_with_prompts[mode] = prompt_config.copy()
 
-        return self._prompts
+    def build_user_prompt(self, mode: str, text: str) -> str:
+        if mode not in self._modes_with_prompts:
+            raise ValueError(f"Mode '{mode}' not found in prompts.")
 
-    def is_configured(self) -> bool:
-        """Check if AI service is configured."""
-        return bool(self.config.AI_BASE_URL)
+        rules = self._modes_with_prompts[mode]["rules"].copy()
 
-    def get_prompt(self, mode: str) -> str:
-        """Get prompt template for mode, falling back to first available or a bare default."""
-        if mode in self._prompts:
-            return self._prompts[mode]
-        if self._prompts:
-            return next(iter(self._prompts.values()))
-        return "Process the following text:\n\n{text}"
-
-    def _build_prompt(self, prompt_config: dict) -> str:
-        """Return the rendered prompt template for a given mode config.
-
-        This mirrors the logic used when the file is first loaded, so it can be
-        reused when new modes are added dynamically.
-        """
-        instruction = prompt_config.get("instruction", "")
-        placeholder = prompt_config.get("input_placeholder", "{text}")
-
-        if "formatting_rules" in prompt_config:
-            rules_text = "\n".join(
-                f"- {rule}" for rule in prompt_config["formatting_rules"]
+        names_list = self.load_names()
+        if names_list:
+            rules.append(
+                "Fix the spelling of personal names using this name list when appropriate:\n"
+                f"{names_list}"
             )
-            return f"Task: {instruction}\n\nFormatting rules:\n{rules_text}\n\n{placeholder}"
-        elif "rules" in prompt_config:
-            rules_text = "\n".join(
-                f"{i+1}. {rule}" for i, rule in enumerate(prompt_config["rules"])
-            )
-            return (
-                f"Task: {instruction}\n\nInstructions:\n{rules_text}\n\n{placeholder}"
-            )
-        else:
-            return f"Task: {instruction}\n\n{placeholder}"
 
-    def format_prompt(self, mode: str, text: str, names: list = None) -> str:
-        """Format prompt with text and optional personal names."""
-        template = self.get_prompt(mode)
-        names_str = ", ".join(names) if names else ""
-        # Use safe format_map so missing placeholders (e.g. {names} not in template) don't crash
-        prompt = template.format_map({"text": text, "names": names_str})
-        print(prompt)
-        return prompt
+        combined_rules = "\n".join(f"- {rule}" for rule in rules)
 
-    def process(self, text: str, mode: str = "summarize", names: list = None) -> str:
-        """
-        Process text with AI.
-
-        Args:
-            text: Input text
-            mode: Processing mode ('summarize' or 'grammar')
-            names: Optional list of personal names for spelling correction
-
-        Returns:
-            AI response text
-        """
-        if not self.is_configured():
-            raise ValueError("AI endpoint not configured")
-
-        # Use provided names or get from config
-        if names is None:
-            names = self.config.get_personal_names()
-
-        prompt = self.format_prompt(mode, text, names)
-        payload = json.dumps(
-            {
-                "model": self.config.AI_MODEL,
-                "messages": [{"role": "user", "content": prompt}],
-                "stream": False,
-            }
-        ).encode()
-
-        url = f"{self.config.AI_BASE_URL.rstrip('/')}/chat/completions"
-        req = urlreq.Request(
-            url,
-            data=payload,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.config.AI_API_KEY}",
-            },
-            method="POST",
-        )
-
-        with urlreq.urlopen(req, timeout=600) as resp:
-            result = json.loads(resp.read())
-
-        return result["choices"][0]["message"]["content"]
-
-    def process_stream(
-        self, text: str, mode: str = "summarize", names: list = None
-    ) -> Generator[str, None, None]:
-        """
-        Process text with AI using streaming.
-
-        Args:
-            text: Input text
-            mode: Processing mode ('summarize' or 'grammar')
-            names: Optional list of personal names for spelling correction
-
-        Yields:
-            Chunks of AI response text
-        """
-        if not self.is_configured():
-            raise ValueError("AI endpoint not configured")
-
-        # Use provided names or get from config
-        if names is None:
-            names = self.config.get_personal_names()
-
-        prompt = self.format_prompt(mode, text, names)
-        payload = json.dumps(
-            {
-                "model": self.config.AI_MODEL,
-                "messages": [{"role": "user", "content": prompt}],
-                "stream": True,
-            }
-        ).encode()
-
-        url = f"{self.config.AI_BASE_URL.rstrip('/')}/chat/completions"
-        req = urlreq.Request(
-            url,
-            data=payload,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.config.AI_API_KEY}",
-            },
-            method="POST",
-        )
-
-        with urlreq.urlopen(req, timeout=600) as resp:
-            # Read streaming response line by line
-            buffer = ""
-            while True:
-                chunk = resp.read(1024)
-                if not chunk:
-                    break
-                buffer += chunk.decode("utf-8")
-
-                # Process complete lines (SSE format: "data: {...}")
-                while "\n" in buffer:
-                    line, buffer = buffer.split("\n", 1)
-                    line = line.strip()
-                    if not line:
-                        continue
-                    if line.startswith("data: "):
-                        data = line[6:]  # Remove "data: " prefix
-                        if data == "[DONE]":
-                            return
-                        try:
-                            parsed = json.loads(data)
-                            delta = parsed.get("choices", [{}])[0].get("delta", {})
-                            content = delta.get("content", "")
-                            if content:
-                                yield content
-                        except json.JSONDecodeError:
-                            continue
-
-    # ------------------------------------------------------------------
-    # Mode management helpers
-    # ------------------------------------------------------------------
-
-    def available_modes(self) -> list[str]:
-        """Return a list of mode keys currently configured."""
-        return list(self._prompts.keys())
-
-    def mode_info(self) -> dict:
-        """Return metadata for each mode (display name + raw config)."""
-        # include display_name fallback to capitalized key
-        return {
-            mode: {
-                "display_name": self._prompt_configs.get(mode, {}).get("display_name")
-                or mode.replace("_", " ").capitalize(),
-                **self._prompt_configs.get(mode, {}),
-            }
-            for mode in self.available_modes()
-        }
-
-    def add_mode(self, mode: str, prompt_config: dict) -> None:
-        """Add a new mode and persist it to prompts.toml.
-
-        ``mode`` must be a valid identifier (alphanumeric and underscores).
-        ``prompt_config`` should follow the structure expected in the TOML
-        file (instruction, rules/formatting_rules, etc).  If the mode already
-        exists a ``ValueError`` is raised.
-        """
-        if not mode or not mode.replace("_", "").isalnum():
-            raise ValueError("Mode name must be alphanumeric/underscores")
-        if mode in self._prompts:
-            raise ValueError(f"Mode '{mode}' already exists")
-
-        self._prompt_configs[mode] = prompt_config.copy()
-        self._prompts[mode] = self._build_prompt(prompt_config)
-
-        # Append to the TOML file.  We don't have a writer library installed,
-        # so we build a very simple representation ourselves.  This will not
-        # preserve comments or formatting, but is good enough for the purposes
-        # of in-app editing.  Using json.dumps gives us valid TOML strings/arrays
-        # for our simple values.
-        prompts_path = Path(__file__).parent.parent / "prompts.toml"
-        lines = ["", f"[prompts.{mode}]"]
-        # write display_name first if provided
-        if "display_name" in prompt_config:
-            lines.append(f"display_name = {json.dumps(prompt_config['display_name'])}")
-        if "instruction" in prompt_config:
-            lines.append(f"instruction = {json.dumps(prompt_config['instruction'])}")
-        if "input_placeholder" in prompt_config:
-            lines.append(
-                f"input_placeholder = {json.dumps(prompt_config['input_placeholder'])}"
-            )
-        if "formatting_rules" in prompt_config:
-            lines.append(
-                f"formatting_rules = {json.dumps(prompt_config['formatting_rules'])}"
-            )
-        if "rules" in prompt_config:
-            lines.append(f"rules = {json.dumps(prompt_config['rules'])}")
-
-        with open(prompts_path, "a") as f:
-            f.write("\n".join(lines))
-            f.write("\n")
-
-    def get_config_hint(self) -> str:
-        """Get configuration hint for AI."""
         return (
-            "Add to your .env file:\n"
-            "  AI_BASE_URL=http://localhost:11434/v1   # Ollama\n"
-            "  AI_BASE_URL=http://localhost:1234/v1    # LM Studio\n"
-            "Then restart the server."
+            "Apply all of the following rules to the text.\n\n"
+            "Rules:\n"
+            f"{combined_rules}\n\n"
+            "Process:\n"
+            "- First, internally list the tasks required to follow all rules, then carry them out.\n"
+            "- Do not display your task list or reasoning.\n\n"
+            "Output:\n"
+            "- Return the full corrected text only.\n"
+            "- Do not remove any sentences or information.\n\n"
+            f"Text:\n{text}"
         )
+
+    def call_model(self, messages, stream=False):
+        options = {}
+        if self.enable_thinking:
+            options["think"] = True
+
+        try:
+            return chat(
+                model=self.ollama_model,
+                messages=messages,
+                options=options,
+                stream=stream,
+            )
+        except ollama.ResponseError as e:
+            if e.status_code == 404:
+                logger.warning(f"Model not found. Pulling {self.ollama_model}...")
+                ollama.pull(self.ollama_model)
+                return chat(
+                    model=self.ollama_model,
+                    messages=messages,
+                    options=options,
+                    stream=stream,
+                )
+            else:
+                logger.error(f"Ollama error: {e}")
+                raise
+
+    def process_prompts(self, mode: str, text: str, stream: bool = False) -> str:
+        user_prompt = self.build_user_prompt(mode, text)
+
+        messages = [
+            {"role": "system", "content": self.system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        if stream:
+            full_text = []
+
+            for chunk in self.call_model(messages, stream=True):
+                delta = chunk.get("message", {}).get("content", "")
+                if delta:
+                    sys.stdout.write(delta)
+                    sys.stdout.flush()
+                    full_text.append(delta)
+
+            corrected = "".join(full_text).strip()
+
+        else:
+            response = self.call_model(messages, stream=False)
+            corrected = response["message"]["content"].strip()
+
+        # Safety check: ensure model didn’t delete large portions
+        if len(corrected) < len(text) * 0.6:
+            raise RuntimeError("Model response shrank too much — possible deletion.")
+
+        return corrected
+
+
+if __name__ == "__main__":
+    aiproc = AIProcessing()
+
+    test_sentence = (
+        "I am a potato that is very sleep. Can fix me? "
+        "Alfie, joquin, peter, Rishita. "
+        "Heading one. Potato lab. "
+        "This is the story of lab fillled with potato. Potatoes."
+    )
+
+    # Set stream=True if you want to see tokens (including thinking if model exposes it)
+    result = aiproc.process_prompts(
+        mode="journal",
+        text=test_sentence,
+        stream=True,
+    )
+
+    print("\n\nFinal result:\n", result)

@@ -1,19 +1,10 @@
 [prompts.journal]
 rules = [
-  "Fix grammar, spelling, capitalization, spacing, and punctuation",
-  "Combine all sentences into clear paragraphs by topic. No need to reorder anything",
-  "Do not change, remove, or add any words or sentences I used.",
-  "Do not change the way I said something",
-  "Allowed exceptions: You may correct spelling mistakes, adjust spacing/line breaks, and apply markdown formatting ONLY when explicitly requested.",
-  "If I say something twice as a fix apply it and combine it",
-  "These are words that can be used to correct names: {names}. If a name appears in the text, it should be replaced with something from this list only.",
-  "If I say 'make this a list': Convert the content into a markdown list using '-', remove any structural cues like 'next' or 'end list', do not change wording of items.",
-  "If I say 'make this a numbered list': Convert into a numbered markdown list using '1.', do not change wording of items.",
-  "If I say 'heading one', 'heading two', or 'heading three': Convert that sentence into a markdown heading of that level.",
-  "Just write the modified text and nothing else.",
+  "Fix the grammar, spelling, capitalization, spacing, and punctuation",
+  "If I say something twice apply the most correct one and combine them",
+  "Only if I say 'make this a list': Convert the content into a markdown list using '-', remove any structural cues like 'next' or 'end list', do not change wording of items.",
+  "Only I say 'heading one', 'heading two', or 'heading three': Convert the next sentence into a markdown heading of the level that I said with the newlines.",
 ]
-instruction = "This is a transcription from a TTS software. Pretend you are just fixing minor things. Dont change what I said."
-input_placeholder = "Text: {text}"
 
 [prompts.report]
 instruction = "This is a transcription of a report. Fix the text without changing my wording."
