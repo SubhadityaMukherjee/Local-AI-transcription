@@ -3,8 +3,8 @@
 I wanted to build a customizable frontend for Whisper.cpp. I know there are a lot of them, but this works for my own quirks
 
 - Note that a bunch of this was vibe coded using Claude/other local models. Please do not try to use this in production. This is at the moment meant to be a local utility only!!
-<img width="1779" height="1052" alt="SCR-20260220-pdzq" src="https://github.com/user-attachments/assets/1a8b98ac-45d0-44b5-aee1-354901fb0907" />
-<img width="956" height="292" alt="SCR-20260220-pjwc" src="https://github.com/user-attachments/assets/d6a9fd9e-3ca0-4f1a-90f3-e59b491b6cb0" />
+  <img width="1779" height="1052" alt="SCR-20260220-pdzq" src="https://github.com/user-attachments/assets/1a8b98ac-45d0-44b5-aee1-354901fb0907" />
+  <img width="956" height="292" alt="SCR-20260220-pjwc" src="https://github.com/user-attachments/assets/d6a9fd9e-3ca0-4f1a-90f3-e59b491b6cb0" />
 
 ## Setup
 
@@ -18,6 +18,8 @@ I wanted to build a customizable frontend for Whisper.cpp. I know there are a lo
 
 ### Recording & Transcription
 
+If you are on linux - install `sudo apt install arecord`. If you are on mac `brew install sox`
+
 1. **Record Audio**: Click the red record button to start recording from your microphone. Click again to stop.
 2. **Append Recording**: Click the green `+` button to append new recording to an existing job.
 3. **Upload File**: Drag and drop or click to upload audio/video files (mp3, wav, flac, m4a, mp4, mkv, mov).
@@ -25,6 +27,7 @@ I wanted to build a customizable frontend for Whisper.cpp. I know there are a lo
 ### Auto-Fix Toggle
 
 In the header, there's a toggle switch labeled **"Auto-fix on complete"**. When enabled:
+
 - The AI will automatically run the "Auto fix text" (grammar/structure fix) action when transcription completes
 - This saves you a click after each recording
 - The setting persists in your browser's localStorage
@@ -38,9 +41,9 @@ In the header, there's a toggle switch labeled **"Auto-fix on complete"**. When 
 ### AI Actions
 
 Once a transcript is ready, the toolbar will show a **mode selector** along with a
-single action button.  The selector is populated from `prompts.toml` on the
+single action button. The selector is populated from `prompts.toml` on the
 server and you can choose between any of the configured modes (summarize,
-grammar, or your own custom modes).  Click **+ Mode** to define a new mode using
+grammar, or your own custom modes). Click **+ Mode** to define a new mode using
 a simple form; the new prompt will be appended to `prompts.toml` and available
 immediately.
 
@@ -60,17 +63,18 @@ Additional toolbar controls:
 ### AI Results Panel
 
 The right panel shows your AI processing history:
+
 - Click to expand/collapse results
 - Use Copy or Export buttons for each result
 - Delete unwanted results with the ✕ button
 
 ## Customizing Prompts
 
-The `prompts.toml` file controls the set of **modes** that the AI can run.  Each
+The `prompts.toml` file controls the set of **modes** that the AI can run. Each
 mode corresponds to a top‑level section under `[prompts]` and the UI will
-populate a selector based on the file.  The list is displayed in the same order
+populate a selector based on the file. The list is displayed in the same order
 the modes appear in `prompts.toml` (not sorted alphabetically), so you can
-easily organize them however you like.  You **can** edit `prompts.toml` by hand
+easily organize them however you like. You **can** edit `prompts.toml` by hand
 and restart the server, or create new modes directly from the web interface.
 
 Below are examples of the built‑in modes:
@@ -116,8 +120,9 @@ To add custom structural commands, add them to the grammar rules:
 ```
 
 Available structural commands in default config:
+
 - `begin list` / `end list` - Bullet lists
-- `begin sublist` / `end sublist` - Indented sub-items  
+- `begin sublist` / `end sublist` - Indented sub-items
 - `begin numbered list` / `end numbered list` - Ordered lists
 - `new paragraph` - Paragraph break
 - `line break` - Single line break

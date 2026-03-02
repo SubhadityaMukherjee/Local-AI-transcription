@@ -38,6 +38,10 @@ import uuid
 from pathlib import Path
 
 import click
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 # ── Logging setup ──────────────────────────────────────────────────────────────
 
@@ -64,9 +68,10 @@ def _load_services(use_db: bool = False):
     from config import Config  # type: ignore
     from ai_service import AIService  # type: ignore
     from transcription_service import TranscriptionService  # type: ignore
-    from job_store import SQLJobStore  # type: ignore
 
     cfg = Config()
+
+    from job_store import SQLJobStore  # type: ignore
 
     store = SQLJobStore(cfg)
     logger.info(
@@ -246,19 +251,22 @@ def cli(ctx, verbose, db):
 
 @cli.command()
 @click.argument("file", type=click.Path(exists=True))
-@click.option(
-    "--ai",
-    "ai_mode",
-    default=None,
-    help="AI processing mode to apply after transcription (e.g. summarize)",
-)
+@click.argument("mode", default=None, required=False, metavar="[MODE]")
 @click.option(
     "--names", default="", help="Comma-separated names to help spelling correction"
 )
 @click.option("--out", default=None, help="Write transcript to this file")
 @click.pass_context
-def transcribe(ctx, file, ai_mode, names, out):
-    """Transcribe an audio FILE and optionally process with AI."""
+def transcribe(ctx, file, mode, names, out):
+    """Transcribe an audio FILE, optionally processing with AI MODE immediately.
+
+    \b
+    Examples:
+      whisper-cli transcribe meeting.mp3
+      whisper-cli transcribe meeting.mp3 summarize
+      whisper-cli transcribe meeting.mp3 action_items --names "Alice,Bob"
+    """
+    ai_mode = mode
     logger.info("=== transcribe command ===")
     cfg, store, ai, ts = _load_services(ctx.obj["db"])
 
@@ -302,6 +310,7 @@ def transcribe(ctx, file, ai_mode, names, out):
 
 
 @cli.command()
+@click.argument("mode", default=None, required=False, metavar="[MODE]")
 @click.option(
     "--duration",
     "-d",
@@ -310,9 +319,6 @@ def transcribe(ctx, file, ai_mode, names, out):
     help="Recording duration in seconds (default: record until ENTER)",
 )
 @click.option("--out", default=None, help="Output WAV path (default: auto-generated)")
-@click.option(
-    "--ai", "ai_mode", default=None, help="AI processing mode after transcription"
-)
 @click.option(
     "--names", default="", help="Comma-separated names for spelling correction"
 )
@@ -323,8 +329,17 @@ def transcribe(ctx, file, ai_mode, names, out):
     help="Just record; skip transcription",
 )
 @click.pass_context
-def record(ctx, duration, out, ai_mode, names, skip_transcribe):
-    """Record from microphone, then transcribe and optionally process with AI."""
+def record(ctx, mode, duration, out, names, skip_transcribe):
+    """Record from microphone, transcribe, and optionally process with AI MODE.
+
+    \b
+    Examples:
+      whisper-cli record
+      whisper-cli record summarize
+      whisper-cli record action_items --duration 60
+      whisper-cli record --no-transcribe --out meeting.wav
+    """
+    ai_mode = mode
     logger.info("=== record command ===")
     cfg, store, ai, ts = _load_services(ctx.obj["db"])
 
@@ -381,21 +396,50 @@ def record(ctx, duration, out, ai_mode, names, skip_transcribe):
 
 
 @cli.command()
-@click.option("--id", "job_id", default=None, help="Show details for a specific job ID")
+@click.option(
+    "--id", "job_id", default=None, help="Show full details for a specific job ID"
+)
+@click.option(
+    "--delete",
+    "delete_id",
+    default=None,
+    metavar="ID",
+    help="Delete a specific job by ID",
+)
 @click.option("--clear", is_flag=True, help="Delete all completed / errored jobs")
 @click.option("--limit", default=20, show_default=True, help="Max jobs to list")
 @click.pass_context
-def jobs(ctx, job_id, clear, limit):
-    """List or inspect transcription jobs."""
+def jobs(ctx, job_id, delete_id, clear, limit):
+    """List, inspect, or delete transcription jobs.
+
+    \b
+    Examples:
+      whisper-cli jobs
+      whisper-cli jobs --id <uuid>
+      whisper-cli jobs --delete <uuid>
+      whisper-cli jobs --clear
+    """
     logger.info("=== jobs command ===")
     _, store, _, _ = _load_services(ctx.obj["db"])
 
+    # ── delete a single job ────────────────────────────────────────────────────
+    if delete_id:
+        if not store.get(delete_id):
+            click.echo(f"❌ Job '{delete_id}' not found.", err=True)
+            sys.exit(1)
+        store.delete(delete_id)
+        logger.info("Deleted job %s", delete_id[:8])
+        click.echo(f"🗑  Deleted job {delete_id}.")
+        return
+
+    # ── clear all completed/errored ────────────────────────────────────────────
     if clear:
         n = store.clear_completed()
         logger.info("Cleared %d jobs", n)
         click.echo(f"🗑  Cleared {n} completed/errored job(s).")
         return
 
+    # ── show single job detail ─────────────────────────────────────────────────
     if job_id:
         job = store.get(job_id)
         if not job:
@@ -404,25 +448,33 @@ def jobs(ctx, job_id, clear, limit):
         _print_job_detail(job)
         return
 
+    # ── list all ───────────────────────────────────────────────────────────────
     all_jobs = store.list_all(limit=limit)
     if not all_jobs:
         click.echo("No jobs found.")
         return
 
-    click.echo(f"\n{'ID':38} {'Status':12} {'File':30} {'Created'}")
-    click.echo("─" * 95)
+    STATUS_ICON = {
+        "queued": "⏳",
+        "processing": "⚙️ ",
+        "done": "✅",
+        "error": "❌",
+        "cancelled": "🚫",
+    }
+
+    click.echo(f"\n  {'ID':38} {'Status':12} {'AI':4} {'File':28} {'Created'}")
+    click.echo("  " + "─" * 97)
     for j in all_jobs:
         ts_str = time.strftime("%Y-%m-%d %H:%M", time.localtime(j["created_at"]))
-        status_icon = {
-            "queued": "⏳",
-            "processing": "⚙️ ",
-            "done": "✅",
-            "error": "❌",
-            "cancelled": "🚫",
-        }.get(j["status"], "❓")
+        icon = STATUS_ICON.get(j["status"], "❓")
+        ai_tag = f"[{len(j.get('ai_results') or [])}]" if j.get("ai_results") else "   "
         click.echo(
-            f"{j['id']:38} {status_icon} {j['status']:10} {j['filename'][:30]:30} {ts_str}"
+            f"  {j['id']:38} {icon} {j['status']:10} {ai_tag:4} "
+            f"{j['filename'][:28]:28} {ts_str}"
         )
+    click.echo(
+        f"\n  {len(all_jobs)} job(s) shown. Use --id <uuid> to see transcript & AI results.\n"
+    )
 
 
 # ── modes command ──────────────────────────────────────────────────────────────

@@ -13,6 +13,7 @@ import json
 import logging
 import time
 import uuid
+import shutil
 from typing import Optional
 
 from sqlalchemy import (
@@ -26,9 +27,11 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from pathlib import Path
 
 logger = logging.getLogger("whisper_cli.job_store")
-
+RECORDINGS_DIR = Path(__file__).parent / "recordings"
+RECORDINGS_DIR.mkdir(exist_ok=True)
 
 # ── ORM model ──────────────────────────────────────────────────────────────────
 
@@ -130,9 +133,29 @@ class SQLJobStore:
         pass
 
     def create(self, filename: str) -> dict:
+        # Convert input filename to Path object
+        input_path = Path(filename)
+
+        # Create safe filename for storage (strip path, sanitize)
+        safe_filename = input_path.name
+        stored_path = RECORDINGS_DIR / safe_filename
+
+        # Copy original file to recordings/ directory
+        if input_path.is_file():
+            shutil.copy2(input_path, stored_path)
+            stored_filename = str(stored_path)
+            logger.info("Copied %s -> %s", input_path, stored_path)
+        else:
+            # If input doesn't exist, store what was passed (for compatibility)
+            stored_filename = filename
+            logger.warning(
+                "Input file %s not found, storing original filename", filename
+            )
+
+        # Create job with stored path
         job = JobModel(
             id=str(uuid.uuid4()),
-            filename=filename,
+            filename=str(stored_filename),  # Now points to recordings/
             status="queued",
             progress=0,
             transcript=None,
@@ -144,8 +167,16 @@ class SQLJobStore:
             s.add(job)
             s.commit()
             result = job.to_dict()
-        logger.info("Created job %s for file '%s'", result["id"][:8], filename)
+        logger.info("Created job %s for file '%s'", result["id"][:8], stored_filename)
         return result
+
+    # Add helper method to get absolute stored path
+    def get_recording_path(self, job_id: str) -> Optional[Path]:
+        """Returns Path to actual recording file for a job."""
+        job = self.get(job_id)
+        if not job or not job["filename"]:
+            return None
+        return Path(job["filename"])
 
     def get(self, job_id: str) -> Optional[dict]:
         with self._session() as s:
