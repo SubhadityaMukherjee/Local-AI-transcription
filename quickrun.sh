@@ -1,1 +1,1 @@
-uv run cli.py record
+uv run cli.py record $1

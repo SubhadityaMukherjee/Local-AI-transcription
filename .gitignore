@@ -2,6 +2,7 @@ vendor/whisper.cpp/build/
 vendor/whisper.cpp/models/*.bin
 vendor/whisper.cpp/models/*.mlmodelc
 models/
+whisper.db
 *.db
 *.bin
 .DS_Store

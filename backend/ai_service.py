@@ -107,6 +107,7 @@ class AIService:
         prompt = self.format_prompt(mode, text, names)
         system = self.build_system_prompt(self._prompt_configs[mode], names)
         logger.debug("Built messages for mode=%s", mode)
+        logger.debug(f"Message {system, prompt}")
 
         return [
             {"role": "system", "content": system},

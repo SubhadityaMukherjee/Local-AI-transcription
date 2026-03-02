@@ -210,7 +210,3 @@ class TranscriptionService:
             print(f"[job:{job_id[:8]}] ERROR: {e}")
             traceback.print_exc()
             return "error", str(e)
-
-        finally:
-            src.unlink(missing_ok=True)
-            wav.unlink(missing_ok=True)
