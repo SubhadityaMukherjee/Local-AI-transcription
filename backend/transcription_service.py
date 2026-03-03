@@ -50,13 +50,12 @@ class TranscriptionService:
         progress_callback: Callable[[dict], None] = None,
         cancel_event: Optional[threading.Event] = None,
     ):
-        """Transcribe audio file using Whisper with flicker-reduction logic."""
+        """Transcribe audio file using Whisper with flicker‑reduction and deduplication."""
         if not self.config.WHISPER_BIN:
             raise RuntimeError("whisper-cli binary not found — run ./setup.sh")
         if not self.config.WHISPER_MODEL:
             raise RuntimeError("No Whisper model found — run ./setup.sh")
 
-        # Define output path and threading (The missing lines!)
         out_stem = str(self.config.OUTPUT_DIR / job_id)
         threads = str(max(4, os.cpu_count() or 4))
 
@@ -72,20 +71,25 @@ class TranscriptionService:
             "--print-progress",
             "--threads",
             threads,
+            # Stability controls
+            "--entropy-thold",
+            "2.0",
+            "--temperature",
+            "0",
         ]
 
-        # Capture STDOUT/STDERR combined to catch both progress and text segments
         proc = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
         )
 
         last_pct = -1
+        last_segment = ""  # to avoid repeating the same text segment
+
         for line in proc.stdout:
             line = line.strip()
             if not line:
                 continue
 
-            # Check for cancellation request and terminate child process
             if cancel_event and cancel_event.is_set():
                 try:
                     proc.terminate()
@@ -94,14 +98,13 @@ class TranscriptionService:
                 proc.wait()
                 raise JobCancelledError("cancelled")
 
-            print(f"[whisper] {line}")  # Keep server logs active
+            print(f"[whisper] {line}")
 
-            # 1. Parse Progress (flicker-free)
+            # 1. Parse progress
             if "progress =" in line:
                 try:
                     pct_str = line.split("=")[-1].replace("%", "").strip()
                     pct = int(float(pct_str))
-                    # Only trigger callback if percentage actually moved up
                     if pct > last_pct:
                         last_pct = pct
                         if progress_callback:
@@ -115,11 +118,12 @@ class TranscriptionService:
                 except (ValueError, IndexError):
                     pass
 
-            # 2. Parse Live Text Segments (the "Smooth Printing" fix)
+            # 2. Parse live text segments, skip exact duplicates
             elif "-->" in line and "]" in line:
                 try:
                     text_part = line.split("]")[-1].strip()
-                    if text_part and progress_callback:
+                    if text_part and progress_callback and text_part != last_segment:
+                        last_segment = text_part
                         progress_callback(
                             {
                                 "stage": "transcribing",
@@ -131,20 +135,29 @@ class TranscriptionService:
                     pass
 
         proc.wait()
-
         if proc.returncode != 0:
             raise RuntimeError(f"whisper-cli exited with code {proc.returncode}")
 
-        # Cleanup and return final text
+        # 3. Read and deduplicate final transcript
         txt_path = Path(out_stem + ".txt")
-        if txt_path.exists():
-            text = txt_path.read_text().strip()
-            txt_path.unlink(missing_ok=True)
-            # Clean up extra newlines for a clean paragraph
-            text = " ".join(l.strip() for l in text.split("\n") if l.strip())
-            return text
+        if not txt_path.exists():
+            raise RuntimeError("whisper-cli produced no output file")
 
-        raise RuntimeError("whisper-cli produced no output file")
+        text = txt_path.read_text().strip()
+        txt_path.unlink(missing_ok=True)
+
+        # Split, dedup by cleaned line, and join into one paragraph
+        lines = [l.strip() for l in text.splitlines() if l.strip()]
+        seen = set()
+        deduped = []
+        for line in lines:
+            sig = line.lower().replace(" ", "").replace(".", "").replace(",", "")
+            if sig not in seen:
+                seen.add(sig)
+                deduped.append(line)
+
+        text = " ".join(deduped)
+        return text
 
     def process(
         self, src: Path, job_id: str, on_progress: Callable[[int], None] = None

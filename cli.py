@@ -2,10 +2,12 @@
 
 import logging
 import os
+import subprocess
 import sys
 import threading
 import time
 import uuid
+import tempfile
 from pathlib import Path
 import functools
 import click
@@ -179,6 +181,46 @@ def record_audio(output_path: Path, duration: int | None = None) -> Path:
     return output_path
 
 
+# ── Audio concatenation helper ───────────────────────────────────────────────
+
+def _concat_audio_files(sources: list[Path], dst: Path):
+    """Concatenate *Sources* into *dst* using ffmpeg.
+
+    The files are joined in alphabetical order by filename.  A temporary
+    file‑list is written and passed to ffmpeg's concat demuxer.  The output is
+    encoded as 16kHz mono PCM WAV so it can be fed directly to the
+    transcription pipeline.
+    """
+    # ensure deterministic ordering
+    sources = sorted(sources, key=lambda p: p.name)
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as tmp:
+        for s in sources:
+            tmp.write(f"file '{s.resolve()}'\n")
+        list_path = tmp.name
+
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        list_path,
+        "-ar",
+        "16000",
+        "-ac",
+        "1",
+        "-sample_fmt",
+        "s16",
+        str(dst),
+    ]
+    logger.debug("ffmpeg concat command: %s", " ".join(cmd))
+    subprocess.run(cmd, check=True)
+    try:
+        os.unlink(list_path)
+    except Exception:
+        pass
 # ── Progress display ───────────────────────────────────────────────────────────
 
 
@@ -257,28 +299,56 @@ def cli(ctx, verbose, db):
 
 
 @cli.command()
-@click.argument("file", type=click.Path(exists=True))
-@click.argument("mode", default="default", required=False, metavar="[MODE]")
+# accept one or more files and move the mode to an option for clarity
+@click.argument("files", nargs=-1, type=click.Path(exists=True))
+@click.option(
+    "--mode", "-m",
+    default="default",
+    show_default=True,
+    help="Optional AI mode to run after transcription (e.g., 'grammar', 'summarize')",
+)
 @click.option(
     "--names", default="", help="Comma-separated names to help spelling correction"
 )
 @click.option("--out", default=None, help="Write transcript to this file")
 @click.pass_context
 @timed
-def transcribe(ctx, file, mode, names, out):
-    """📁 Transcribe an audio/video file using Whisper.
 
-    FILE: Path to audio or video file (mp3, wav, flac, m4a, mp4, mkv, mov)
+def transcribe(ctx, files, mode, names, out):
+    """📁 Transcribe one or more audio/video files using Whisper.
 
-    [MODE]: Optional AI mode to run after transcription (e.g., 'grammar', 'summarize')
+    FILES: One or more paths to audio/video files. Supported formats include
+    mp3, wav, flac, m4a, mp4, mkv, mov, etc.  When multiple files are given
+    they are concatenated (sorted by filename) before transcription.
+
+    --mode / -m: Optional AI mode to run after transcription (e.g., 'grammar',
+    'summarize').
     """
+
     ai_mode = mode
     logger.info("=== transcribe command ===")
     cfg, store, ai, ts = _load_services(ctx.obj["db"])
 
-    src = Path(file)
-    job = store.create(src.name)
-    job_id = job["id"]
+    if not files:
+        raise click.UsageError("At least one input file must be provided")
+
+    sources = [Path(f) for f in files]
+    sources.sort(key=lambda p: p.name)
+
+    if len(sources) > 1:
+        # each job is identified by the concatenated filenames for traceability
+        job = store.create("+".join(p.name for p in sources))
+        job_id = job["id"]
+        concat_path = cfg.UPLOAD_DIR / f"{job_id}.concat.wav"
+        concat_path.parent.mkdir(parents=True, exist_ok=True)
+        logger.info("Concatenating %d files into %s", len(sources), concat_path)
+        _concat_audio_files(sources, concat_path)
+        src = concat_path
+    else:
+        src = sources[0]
+        job = store.create(src.name)
+        job_id = job["id"]
+
     logger.info("Created job %s for '%s'", job_id[:8], src.name)
 
     store.update(job_id, status="processing")
