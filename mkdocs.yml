@@ -1,4 +1,4 @@
-site_name: OpenML PyTorch Extension
+site_name: Local Transcription Studio
 theme:
   name: material
   features:
