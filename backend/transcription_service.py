@@ -73,7 +73,7 @@ class TranscriptionService:
             "--output-txt",
             "--output-file",
             out_stem,
-            "--print-progress",
+            # "--print-progress",
             "--threads",
             threads,
             "--entropy-thold",
@@ -203,10 +203,31 @@ class TranscriptionService:
             chunks = [wav]
 
         all_texts = []
+        n = len(chunks)
         try:
             for idx, chunk in enumerate(chunks):
                 stem = f"{job_id}-{idx}"
-                text = self._run_whisper(chunk, str(self.config.OUTPUT_DIR / stem), progress_callback, cancel_event)
+
+                # wrap the incoming callback so that each chunk's percent is
+                # scaled into the overall 30‑95 range.  the first chunk starts
+                # at 30, the last chunk ends at 95, and intermediate chunks are
+                # evenly spaced.  we also propagate other fields (text_segment,
+                # message) transparently.
+                def make_cb(i):
+                    def cb(p):
+                        if not progress_callback:
+                            return
+                        p2 = p.copy()
+                        if "pct" in p2:
+                            base = 30 + int(65 * i / n)
+                            span = int(65 / n)
+                            p2["pct"] = base + int(p2["pct"] * span / 100)
+                        progress_callback(p2)
+                    return cb
+
+                wrapped_cb = make_cb(idx)
+
+                text = self._run_whisper(chunk, str(self.config.OUTPUT_DIR / stem), wrapped_cb, cancel_event)
                 all_texts.append(text)
                 if cancel_event and cancel_event.is_set():
                     raise JobCancelledError("cancelled")

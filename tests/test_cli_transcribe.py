@@ -107,13 +107,28 @@ def test_service_chunking(monkeypatch, tmp_path):
     monkeypatch.setattr(svc, "_split_wav", lambda wav, max_secs=300: [tmp_path / "a.wav", tmp_path / "b.wav"])
 
     recorded = []
+    progress_calls = []
+
     def fake_run(wav, out_stem, prog, cancel):
         recorded.append((wav.name, out_stem))
-        # return a snippet that makes deduping obvious
+        # simulate two progress updates per chunk
+        prog({"stage": "transcribing", "pct": 0})
+        prog({"stage": "transcribing", "pct": 100})
         return f"hello from {wav.name}"
+
     monkeypatch.setattr(svc, "_run_whisper", fake_run)
 
-    text = svc.transcribe(tmp_path / "dummy.wav", "job123")
+    def cb(p):
+        progress_calls.append(p.copy())
+
+    text = svc.transcribe(tmp_path / "dummy.wav", "job123", progress_callback=cb)
     assert "hello from a.wav" in text
     assert "hello from b.wav" in text
     assert len(recorded) == 2
+
+    # two chunks each produced two callbacks; percentages should increase
+    assert len(progress_calls) == 4
+    # compute expected percentages: with n=2, span=32 (65//2); base for chunk0=30
+    # chunk1 base=30+32=62; expect sequence 30, 62
+    assert progress_calls[0]["pct"] >= 30
+    assert progress_calls[1]["pct"] <= progress_calls[2]["pct"]

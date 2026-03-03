@@ -234,8 +234,8 @@ def _progress_callback(store, job_id: str):
             pct = value.get("pct", last_pct[0])
             msg = value.get("message", "")
             seg = value.get("text_segment", "")
-            if seg:
-                click.echo(f"  💬 {seg}", err=True)
+            # if seg:
+            #     click.echo(f"  💬 {seg}", err=True)
         else:
             pct = int(value)
             msg = f"{pct}%"
