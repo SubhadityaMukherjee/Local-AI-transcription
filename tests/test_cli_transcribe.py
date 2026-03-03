@@ -87,3 +87,33 @@ def test_transcribe_multiple_files(monkeypatch, tmp_path):
 
     # verify that concat was called with sorted list
     assert called['sources'] == [f2, f1]
+
+
+def test_service_chunking(monkeypatch, tmp_path):
+    # simulate a long WAV and verify that transcribe splits into chunks
+    from backend import transcription_service
+
+    class Cfg:
+        UPLOAD_DIR = tmp_path
+        OUTPUT_DIR = tmp_path
+        WHISPER_BIN = "/bin/true"
+        WHISPER_MODEL = "dummy"
+        CHUNK_THRESHOLD = 1  # very small so we always split
+
+    svc = transcription_service.TranscriptionService(Cfg())
+
+    # fake helpers
+    monkeypatch.setattr(svc, "_get_duration", lambda wav: 10)
+    monkeypatch.setattr(svc, "_split_wav", lambda wav, max_secs=300: [tmp_path / "a.wav", tmp_path / "b.wav"])
+
+    recorded = []
+    def fake_run(wav, out_stem, prog, cancel):
+        recorded.append((wav.name, out_stem))
+        # return a snippet that makes deduping obvious
+        return f"hello from {wav.name}"
+    monkeypatch.setattr(svc, "_run_whisper", fake_run)
+
+    text = svc.transcribe(tmp_path / "dummy.wav", "job123")
+    assert "hello from a.wav" in text
+    assert "hello from b.wav" in text
+    assert len(recorded) == 2
