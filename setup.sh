@@ -16,7 +16,7 @@ err() {
 }
 section() { echo -e "\n${BOLD}── $* ──${RESET}"; }
 
-OLLAMA_MODEL="deepseek-r1"
+OLLAMA_MODEL="deepseek-r1:latest"
 WHISPER_MODEL_NAME="medium.en"
 
 # ── 0. Prereq checks ──────────────────────────────────────────────────────────
