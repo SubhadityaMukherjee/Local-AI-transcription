@@ -3,12 +3,18 @@
 import codecs
 import json
 import logging
+import os
+import subprocess
 import tomllib as tomli
 import urllib.request as urlreq
 from pathlib import Path
 from typing import Generator
 
-import ollama
+try:
+    import ollama
+    OLLAMA_AVAILABLE = True
+except ImportError:
+    OLLAMA_AVAILABLE = False
 
 logger = logging.getLogger("whisper_cli.ai_service")
 
@@ -63,7 +69,10 @@ class AIService:
     # ------------------------------------------------------------------
 
     def is_configured(self) -> bool:
-        return bool(self.config.AI_BASE_URL)
+        ai_service = os.environ.get("AI_SERVICE", "opencode")
+        if ai_service == "ollama":
+            return bool(self.config.AI_BASE_URL)
+        return bool(self.config.AI_MODEL)
 
     def available_modes(self) -> list[str]:
         return list(self._prompts.keys())
@@ -130,7 +139,7 @@ class AIService:
     ) -> Generator[str, None, None]:
 
         if not self.is_configured():
-            logger.error("AI endpoint not configured (AI_BASE_URL not set)")
+            logger.error("AI endpoint not configured")
             raise ValueError("AI endpoint not configured")
 
         names = names if names is not None else self.config.get_personal_names()
@@ -142,10 +151,21 @@ class AIService:
         )
         messages = self._build_messages(text, mode, names)
 
-        # Convert to Ollama message format (same structure)
+        ai_service = os.environ.get("AI_SERVICE", "opencode")
+
+        if ai_service == "ollama":
+            return self._process_with_ollama(messages)
+        else:
+            return self._process_with_opencode(messages)
+
+    def _process_with_ollama(self, messages: list[dict]) -> Generator[str, None, None]:
+        if not OLLAMA_AVAILABLE:
+            logger.error("Ollama requested but ollama package not installed")
+            raise ValueError("Ollama package not installed. Install with: pip install ollama")
+
         try:
-            logger.debug("Calling AI model: %s", self.config.AI_MODEL)
-            response = ollama.chat(
+            logger.debug("Calling Ollama AI model: %s", self.config.AI_MODEL)
+            response = ollama.chat(  # type: ignore
                 model=self.config.AI_MODEL,
                 messages=messages,
                 stream=True,
@@ -156,9 +176,45 @@ class AIService:
                 content = chunk.get("message", {}).get("content")
                 if content:
                     yield content
-            logger.debug("AI processing completed successfully")
+            logger.debug("Ollama processing completed successfully")
         except Exception as e:
-            logger.error("AI processing failed: %s", e, exc_info=True)
+            logger.error("Ollama processing failed: %s", e, exc_info=True)
+            raise
+
+    def _process_with_opencode(self, messages: list[dict]) -> Generator[str, None, None]:
+        try:
+            logger.debug("Calling Opencode AI model: %s", self.config.AI_MODEL)
+            prompt = messages[-1].get("content", "")
+            cmd = [
+                "opencode",
+                "run",
+                "-m",
+                self.config.AI_MODEL,
+                prompt
+            ]
+
+            logger.debug("Running opencode command: %s", " ".join(cmd))
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+
+            if process.stdout:
+                for line in process.stdout:
+                    yield line
+
+            process.wait()
+
+            if process.returncode != 0:
+                error_output = process.stderr.read() if process.stderr else "Unknown error"
+                logger.error("Opencode processing failed with return code %d: %s", process.returncode, error_output)
+                raise RuntimeError(f"Opencode processing failed: {error_output}")
+
+            logger.debug("Opencode processing completed successfully")
+        except Exception as e:
+            logger.error("Opencode processing failed: %s", e, exc_info=True)
             raise
 
     # ------------------------------------------------------------------
@@ -260,6 +316,12 @@ class AIService:
     def get_config_hint(self) -> str:
         return (
             "Add to your .env file:\n"
-            "  AI_BASE_URL=http://localhost:11434/v1   # Ollama\n"
+            "  AI_SERVICE=opencode                    # Use opencode (default)\n"
+            "  AI_MODEL=zai-coding-plan/glm-4.7       # Opencode model\n"
+            "\n"
+            "  # OR for Ollama:\n"
+            "  AI_SERVICE=ollama                      # Use ollama\n"
+            "  AI_BASE_URL=http://localhost:11434/v1  # Ollama endpoint\n"
+            "  AI_MODEL=deepseek-r1:latest            # Ollama model\n"
             "Then restart the server."
         )
