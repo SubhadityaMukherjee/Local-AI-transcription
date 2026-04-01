@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# setup.sh — one-shot setup for Whisper Studio on macOS (Metal/GPU + Opencode)
+# setup.sh — one-shot setup for Whisper Studio on macOS (Metal/GPU + AI Backend)
 set -e
 
 BOLD="\033[1m"
@@ -16,13 +16,15 @@ err() {
 }
 section() { echo -e "\n${BOLD}── $* ──${RESET}"; }
 
+AI_BACKEND_TYPE="${AI_BACKEND_TYPE:-opencode}"
 OPENCODE_MODEL="zai-coding-plan/glm-4.7"
+OLLAMA_MODEL="deepseek-r1:latest"
 WHISPER_MODEL_NAME="medium.en"
 
 # ── 0. Prereq checks ──────────────────────────────────────────────────────────
 section "Checking prerequisites"
 
-for cmd in git cmake ffmpeg python3 opencode; do
+for cmd in git cmake ffmpeg python3; do
 	if command -v "$cmd" &>/dev/null; then
 		info "$cmd  $(command -v $cmd)"
 	else
@@ -30,10 +32,42 @@ for cmd in git cmake ffmpeg python3 opencode; do
 		cmake | ffmpeg) err "$cmd not found — install with: brew install $cmd" ;;
 		git) err "git not found — run: xcode-select --install" ;;
 		python3) err "python3 not found — install with: brew install python" ;;
-		opencode) err "opencode not found — install with: npm install -g opencode" ;;
 		esac
 	fi
 done
+
+section "AI Backend: $AI_BACKEND_TYPE"
+
+if [ "$AI_BACKEND_TYPE" = "ollama" ]; then
+	if command -v ollama &>/dev/null; then
+		info "ollama  $(command -v ollama)"
+	else
+		info "Installing Ollama…"
+		brew install ollama
+	fi
+
+	if ! ollama list &>/dev/null 2>&1; then
+		info "Starting Ollama service…"
+		brew services start ollama
+		sleep 3
+	fi
+
+	if ollama list 2>/dev/null | grep -q "${OLLAMA_MODEL%%:*}"; then
+		info "Ollama model already present: $OLLAMA_MODEL"
+	else
+		info "Pulling $OLLAMA_MODEL (this may take a minute)…"
+		ollama pull "$OLLAMA_MODEL"
+		info "Model ready: $OLLAMA_MODEL"
+	fi
+elif [ "$AI_BACKEND_TYPE" = "opencode" ]; then
+	if command -v opencode &>/dev/null; then
+		info "opencode  $(command -v opencode)"
+	else
+		err "opencode not found — install with: npm install -g opencode"
+	fi
+else
+	err "Invalid AI_BACKEND_TYPE: $AI_BACKEND_TYPE (must be 'opencode' or 'ollama')"
+fi
 
 # ── 1. Init git repo if needed ────────────────────────────────────────────────
 section "Git repo"
@@ -95,7 +129,19 @@ section "Writing .env"
 WHISPER_BIN_PATH="$(pwd)/vendor/whisper.cpp/build/bin/whisper-cli"
 WHISPER_MODEL_PATH="$(pwd)/$MODEL_FILE"
 
-cat >.env <<EOF
+if [ "$AI_BACKEND_TYPE" = "ollama" ]; then
+	cat >.env <<EOF
+WHISPER_BIN=$WHISPER_BIN_PATH
+WHISPER_MODEL=$WHISPER_MODEL_PATH
+
+# Ollama — used for Summarize and Fix Grammar
+AI_SERVICE=ollama
+AI_BASE_URL=http://localhost:11434/v1
+AI_API_KEY=ollama
+AI_MODEL=$OLLAMA_MODEL
+EOF
+else
+	cat >.env <<EOF
 WHISPER_BIN=$WHISPER_BIN_PATH
 WHISPER_MODEL=$WHISPER_MODEL_PATH
 
@@ -103,6 +149,7 @@ WHISPER_MODEL=$WHISPER_MODEL_PATH
 AI_SERVICE=opencode
 AI_MODEL=$OPENCODE_MODEL
 EOF
+fi
 
 info ".env written"
 
@@ -117,7 +164,13 @@ echo -e "${BOLD}${GREEN}✓ Setup complete!${RESET}"
 echo ""
 echo "  Whisper : $WHISPER_BIN_PATH"
 echo "  Model   : $WHISPER_MODEL_PATH"
-echo "  Opencode: $OPENCODE_MODEL"
+
+if [ "$AI_BACKEND_TYPE" = "ollama" ]; then
+	echo "  AI      : Ollama ($OLLAMA_MODEL)"
+else
+	echo "  AI      : Opencode ($OPENCODE_MODEL)"
+fi
+
 echo ""
 echo "  Start   : uv run cli.py -h"
 echo ""
