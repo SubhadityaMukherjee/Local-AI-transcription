@@ -1,3 +1,5 @@
+personal_names.txt
+vendor/
 vendor/whisper.cpp/build/
 vendor/whisper.cpp/models/*.bin
 vendor/whisper.cpp/models/*.mlmodelc

@@ -4,12 +4,44 @@ I wanted to build a customizable CLI for Whisper.cpp that uses a Local LLM to do
 
 ## Setup
 
-- Make sure you have installed `uv` and `ollama` and `git` and `ffmpeg` on your machine
+- Make sure you have installed `uv` and `git` and `ffmpeg` on your machine
+- Install opencode with `npm install -g opencode` (or ollama with `brew install ollama`)
 - If you are on linux - install `sudo apt install arecord`. If you are on mac `brew install sox`
 - Clone this repo
 - I have ONLY tested this out on a Mac with an M chip. I was not trying to make it a universal tool yet
 - Once you have all this, run `./setup.sh` in this directory
+  - Use `AI_BACKEND_TYPE=opencode ./setup.sh` for opencode (default)
+  - Use `AI_BACKEND_TYPE=ollama ./setup.sh` for ollama
 - If all is well, run `./run.sh` and you should be good to go
+
+### AI Service Configuration
+
+By default, this project uses **opencode** for AI processing. You can configure the AI service during setup or by setting environment variables:
+
+**During setup:**
+```bash
+AI_BACKEND_TYPE=opencode ./setup.sh    # Use opencode (default)
+AI_BACKEND_TYPE=ollama ./setup.sh       # Use ollama
+```
+
+**Environment variables:**
+- `AI_SERVICE`: Choose between `opencode` (default) or `ollama`
+- `AI_MODEL`: The model to use (default: `zai-coding-plan/glm-4.7` for opencode, or `deepseek-r1:latest` for ollama)
+
+**For opencode (default):**
+```bash
+AI_SERVICE=opencode
+AI_MODEL=zai-coding-plan/glm-4.7
+```
+
+**For ollama (optional):**
+```bash
+AI_SERVICE=ollama
+AI_BASE_URL=http://localhost:11434/v1
+AI_MODEL=deepseek-r1:latest
+```
+
+Note: If using ollama, install the optional dependency with `pip install ollama` or `uv sync --extra ollama`
 
 ## Usage
 
